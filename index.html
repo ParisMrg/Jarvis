@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0b1118;color:#cfe8ff;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:16px;box-sizing:border-box}
+#orb{width:140px;height:140px;border-radius:50%;border:2px solid #3ab6ff;background:radial-gradient(#0f3550,#0b1118);color:#8fd3ff;font-size:16px;margin:24px 0 12px;box-shadow:0 0 30px #3ab6ff55}
+#orb.on{animation:p 1.6s infinite}
+@keyframes p{50%{box-shadow:0 0 55px #3ab6ffaa}}
+#status{margin-bottom:12px;color:#8fd3ff}
+#log{width:100%;max-width:480px;flex:1;overflow-y:auto}
+#log div{padding:6px 0;line-height:1.4}.me{color:#9fb3c4}.ai{color:#fff}
+details{width:100%;max-width:480px;margin-top:12px}
+input{width:100%;box-sizing:border-box;margin:4px 0;padding:10px;border-radius:8px;border:1px solid #28445a;background:#101c27;color:#fff}
+button.s{padding:10px 14px;margin:4px 4px 0 0;border-radius:8px;border:0;background:#3ab6ff;color:#06121c;font-weight:600}
+</style></head><body>
+<button id="orb">Tap to start</button>
+<button class="s" id="modeBtn"></button>
+<button class="s" id="langBtn"></button>
+<div id="status">Tap the orb, then say “Jarvis…”</div>
+<div id="log"></div>
+<details id="foodBox" open><summary id="foodSum">Food log</summary><div id="food"></div></details>
+<details id="alBox"><summary id="alSum">⏰ Alarms</summary><div id="alarms"></div></details>
+<details><summary>Settings</summary>
+<input id="gemini" type="password" placeholder="Google Gemini API key">
+<input id="spotifyId" placeholder="Spotify Client ID">
+<input id="elKey" type="password" placeholder="ElevenLabs API key (optional)">
+<input id="elVoice" placeholder="ElevenLabs voice ID (optional)">
+<label style="display:block;margin:6px 0"><input type="checkbox" id="natural" style="width:auto"> Natural voice (Gemini, free but limited)</label>
+<button class="s" id="save">Save</button><button class="s" id="conn">Connect Spotify</button>
+<div id="spstat"></div></details>
+<script>
+const $=id=>document.getElementById(id);
+const S={get(k){try{return localStorage.getItem(k)||""}catch(e){return ""}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const log=(w,t)=>{const d=document.createElement("div");d.className=w;d.textContent=(w=="me"?"You: ":"Jarvis: ")+t;$("log").prepend(d)};
+const status=t=>$("status").textContent=t;
+
+// ---------- Spotify (PKCE, no server) ----------
+const REDIRECT=location.origin+location.pathname;
+const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+async function spLogin(){
+  const id=S.get("spotifyId");if(!id){alert("Save your Spotify Client ID first");return}
+  const v=b64(crypto.getRandomValues(new Uint8Array(32)));S.set("verifier",v);
+  const c=b64(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v)));
+  location=`https://accounts.spotify.com/authorize?${new URLSearchParams({client_id:id,response_type:"code",redirect_uri:REDIRECT,scope:"user-modify-playback-state user-read-playback-state",code_challenge_method:"S256",code_challenge:c})}`;
+}
+async function tokenReq(p){
+  const r=await fetch("https://accounts.spotify.com/api/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:S.get("spotifyId"),...p})});
+  const j=await r.json();
+  if(j.access_token){S.set("spTok",j.access_token);S.set("spExp",Date.now()+j.expires_in*1000-60000);if(j.refresh_token)S.set("spRef",j.refresh_token)}
+}
+async function spToken(){
+  if(!S.get("spTok"))return null;
+  if(Date.now()>+S.get("spExp"))await tokenReq({grant_type:"refresh_token",refresh_token:S.get("spRef")});
+  return S.get("spTok");
+}
+async function sp(path,opt={}){
+  const t=await spToken();if(!t)throw new Error("Spotify not connected");
+  return fetch("https://api.spotify.com/v1"+path,{...opt,headers:{Authorization:"Bearer "+t,"Content-Type":"application/json"}});
+}
+const tools={
+  async play_song({title,artist,query}){
+    title=title||query||"";artist=artist||"";
+    const nz=x=>x.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/ς/g,"σ").replace(/[^\p{L}\p{N} ]/gu," "),words=x=>nz(x).split(/\s+/).filter(Boolean);
+    const tk=words(title),ak=words(artist),perfect=1.9+(ak.length?1:0);
+    let best=null,bs=-1;
+    for(const q of [artist?`track:${title} artist:${artist}`:`track:${title}`,`${title} ${artist}`.trim()]){
+      const r=await sp("/search?"+new URLSearchParams({q,type:"track",limit:10}));
+      for(const t of (await r.json()).tracks?.items||[]){
+        const tn=nz(t.name),an=nz(t.artists.map(a=>a.name).join(" "));
+        const sc=(tk.length?tk.filter(w=>tn.includes(w)).length/tk.length:0)*2+(ak.length?ak.filter(w=>an.includes(w)).length/ak.length:0)+(t.popularity||0)/1000;
+        if(sc>bs){bs=sc;best=t}
+      }
+      if(bs>=perfect)break;
+    }
+    const t=best;if(!t)return T("No results for "+title,"Δεν βρέθηκε: "+title);
+    const p=await sp("/me/player/play",{method:"PUT",body:JSON.stringify({uris:[t.uri]})});
+    if(p.status==404)return T("No active Spotify device. Open the Spotify app, play anything once, then retry.","Δεν υπάρχει ενεργή συσκευή Spotify. Άνοιξε την εφαρμογή, παίξε ένα τραγούδι και ξαναδοκίμασε.");
+    if(p.status==403)return T("Spotify refused. Premium is required.","Το Spotify αρνήθηκε. Χρειάζεται Premium.");
+    musicOn=true;playedNow=true;return T(`Now playing ${t.name} by ${t.artists[0].name}.`,`Παίζει τώρα: ${t.name} από ${t.artists[0].name}.`);
+  },
+  async pause_music(){await sp("/me/player/pause",{method:"PUT"});musicOn=false;return T("Paused.","Σε παύση.")},
+  create_event:a=>eventCard(a),
+  set_alarm({time,label}){
+    const d=new Date(time);if(isNaN(d)||d.getTime()<=Date.now())return T("I couldn't read that time.","Δεν κατάλαβα την ώρα.");
+    const a=loadAl();a.push({ts:d.getTime(),label:String(label||"").slice(0,60)});saveAl(a);renderAl();keepAwake();(alarmCtx=alarmCtx||new AudioContext()).resume();
+    const hm=d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+    return T(`Alarm set for ${hm}. Keep this page open with the screen on.`,`Το ξυπνητήρι ορίστηκε για τις ${hm}. Κράτα τη σελίδα ανοιχτή με την οθόνη αναμμένη.`);
+  },
+  cancel_alarms(){saveAl([]);renderAl();return T("All alarms cancelled.","Όλα τα ξυπνητήρια ακυρώθηκαν.")},
+  log_meal({description,calories,protein_g}){
+    const f=loadFood(),k=dayKey(),n=new Date(),a=f[k]||[];
+    a.push({t:String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0"),d:String(description||"").slice(0,80),k:Math.round(+calories||0),p:Math.round((+protein_g||0)*10)/10});
+    f[k]=a;saveFood(f);renderFood();const t=totals(a),m=a[a.length-1];
+    return T(`Logged: ${m.d}, about ${m.k} kcal and ${m.p} g protein. Today so far: ${t.k} kcal, ${Math.round(t.p)} g protein.`,`Καταγράφηκε: ${m.d}, περίπου ${m.k} kcal και ${m.p} g πρωτεΐνη. Σήμερα μέχρι τώρα: ${t.k} kcal, ${Math.round(t.p)} g πρωτεΐνη.`);
+  },
+  remove_last_meal(){
+    const f=loadFood(),k=dayKey(),a=f[k]||[];
+    if(!a.length)return T("There is nothing to remove today.","Δεν υπάρχει κάτι να αφαιρεθεί σήμερα.");
+    const m=a.pop();f[k]=a;saveFood(f);renderFood();const t=totals(a);
+    return T(`Removed ${m.d}. Today: ${t.k} kcal, ${Math.round(t.p)} g protein.`,`Αφαιρέθηκε: ${m.d}. Σήμερα: ${t.k} kcal, ${Math.round(t.p)} g πρωτεΐνη.`);
+  }
+};
+
+let musicOn=false,playedNow=false;
+async function keepMusic(){
+  if(!musicOn)return;
+  try{await sleep(600);const r=await sp("/me/player");if(r.status==200&&!(await r.json()).is_playing)await sp("/me/player/play",{method:"PUT"})}catch(e){}
+}
+async function reply(r){if(playedNow){playedNow=false;log("ai",r)}else await speak(r);await keepMusic()}
+
+// ---------- Food log ----------
+const dayKey=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const loadFood=()=>{try{return JSON.parse(S.get("food")||"{}")}catch(e){return {}}};
+const saveFood=f=>S.set("food",JSON.stringify(f));
+const totals=a=>a.reduce((o,m)=>({k:o.k+m.k,p:o.p+m.p}),{k:0,p:0});
+function renderFood(){
+  const f=loadFood(),today=f[dayKey()]||[],t=totals(today),box=$("food");box.textContent="";
+  $("foodSum").textContent=`🍽 ${T("Food log","Σημειωματάριο")} — ${t.k} kcal · ${Math.round(t.p)} g ${T("protein","πρωτεΐνη")}`;
+  today.forEach((m,i)=>{const r=document.createElement("div");r.textContent=`${m.t} — ${m.d} · ${m.k} kcal · ${m.p} g `;const x=document.createElement("button");x.textContent="✕";x.className="s";x.style.padding="2px 8px";x.onclick=()=>{today.splice(i,1);f[dayKey()]=today;saveFood(f);renderFood()};r.append(x);box.append(r)});
+  Object.keys(f).filter(k=>k!=dayKey()).sort().reverse().slice(0,7).forEach(k=>{const tt=totals(f[k]),r=document.createElement("div");r.className="me";r.textContent=`${k}: ${tt.k} kcal · ${Math.round(tt.p)} g`;box.append(r)});
+}
+function foodNote(){
+  const a=loadFood()[dayKey()]||[],t=totals(a);
+  return ` Food log today: ${t.k} kcal, ${Math.round(t.p)} g protein`+(a.length?" ("+a.map(m=>`${m.d}: ${m.k} kcal`).join("; ")+")":"")+".";
+}
+
+// ---------- Alarms (ring only while this page is open) ----------
+let alarmCtx,ringing=null,wl=null;
+const loadAl=()=>{try{return JSON.parse(S.get("alarms")||"[]")}catch(e){return []}};
+const saveAl=a=>S.set("alarms",JSON.stringify(a));
+function renderAl(){
+  const a=loadAl().sort((x,y)=>x.ts-y.ts),box=$("alarms");box.textContent="";
+  $("alSum").textContent=`⏰ ${T("Alarms","Ξυπνητήρια")} (${a.length})`;
+  a.forEach(m=>{const r=document.createElement("div");r.textContent=new Date(m.ts).toLocaleString([],{weekday:"short",hour:"2-digit",minute:"2-digit"})+(m.label?" — "+m.label:"")+" ";const x=document.createElement("button");x.textContent="✕";x.className="s";x.style.padding="2px 8px";x.onclick=()=>{saveAl(loadAl().filter(q=>q.ts!==m.ts));renderAl()};r.append(x);box.append(r)});
+}
+async function keepAwake(){try{if(loadAl().length&&!wl){wl=await navigator.wakeLock.request("screen");wl.onrelease=()=>{wl=null}}}catch(e){}}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState=="visible")keepAwake()});
+function ring(m){
+  ringing=m;const ctx=alarmCtx=alarmCtx||new AudioContext();ctx.resume();
+  const beep=()=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=880;g.gain.value=.4;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+.25)};
+  const iv=setInterval(()=>{beep();setTimeout(beep,350);navigator.vibrate&&navigator.vibrate([400,200,400])},1500);
+  const b=document.createElement("button");b.style.cssText="position:fixed;inset:0;z-index:9;font-size:28px;background:#ff5a5a;color:#fff;border:0";
+  b.textContent="⏰ "+(m.label||T("Alarm","Ξυπνητήρι"))+" — "+T("tap to stop","πάτα για να σταματήσει");
+  b.onclick=()=>{clearInterval(iv);b.remove();ringing=null};document.body.append(b);
+}
+setInterval(()=>{
+  if(ringing)return;const now=Date.now(),a=loadAl(),past=a.filter(m=>m.ts<=now);
+  if(past.length){saveAl(a.filter(m=>m.ts>now));renderAl();const live=past.filter(m=>now-m.ts<300000);if(live.length)ring(live[0])}
+},1000);
+
+// ---------- Gemini ----------
+const T=(en,el)=>lang=="el-GR"?el:en;
+const MODEL="gemini-flash-latest";
+const SYSTEM="You are Jarvis, a calm, dryly witty British butler-style assistant who speaks fluent Greek and English. Always reply in the language the user just spoke (Greek or English). Replies are spoken aloud: 1-3 short sentences, no markdown or lists. Use play_song for music (title and artist separately, in the original script), pause_music to pause, and create_event to add calendar events (work out exact dates from the current date and time; assume 1 hour if no duration is given). Use log_meal when the user says what they ate (one meal at a time): use their calorie and protein numbers if given, otherwise estimate realistically from typical portions. Use set_alarm for alarms (time = next occurrence) and cancel_alarms to cancel them. Use remove_last_meal to undo the last entry. Answer questions about today's intake from the food log. If the audio is silent or unintelligible, politely ask the user to repeat.";
+const TOOLS=[{functionDeclarations:[
+  {name:"play_song",description:"Search Spotify for a song and play it.",parameters:{type:"OBJECT",properties:{title:{type:"STRING",description:"Song title only, in its original script (Greek songs in Greek letters)"},artist:{type:"STRING",description:"Artist name only, in the script Spotify uses (Greek artists in Greek letters), optional"}},required:["title"]}},
+  {name:"pause_music",description:"Pause Spotify playback."},
+  {name:"set_alarm",description:"Set an alarm that rings in this web page.",parameters:{type:"OBJECT",properties:{time:{type:"STRING",description:"Next occurrence as local ISO 8601 datetime, e.g. 2026-10-04T07:30:00"},label:{type:"STRING"}},required:["time"]}},
+  {name:"cancel_alarms",description:"Cancel all alarms."},
+  {name:"log_meal",description:"Record one meal the user ate, with estimated calories and protein.",parameters:{type:"OBJECT",properties:{description:{type:"STRING",description:"Short meal description in the user's language"},calories:{type:"NUMBER"},protein_g:{type:"NUMBER"}},required:["description","calories","protein_g"]}},
+  {name:"remove_last_meal",description:"Remove the most recently logged meal of today."},
+  {name:"create_event",description:"Prepare a calendar event for the user to save.",parameters:{type:"OBJECT",properties:{title:{type:"STRING"},start:{type:"STRING",description:"Local start time, ISO 8601 like 2026-10-03T18:00:00"},end:{type:"STRING",description:"Local end time, same format (optional)"},description:{type:"STRING"},location:{type:"STRING"}},required:["title","start"]}}
+]}];
+const FAST=["play_song","pause_music","create_event","log_meal","remove_last_meal","set_alarm","cancel_alarms"];
+let hist=[],think=true;
+function eventCard(a){
+  const s=new Date(a.start);if(isNaN(s))return T("I couldn't read that date.","Δεν κατάλαβα την ημερομηνία.");
+  let e=a.end?new Date(a.end):null;if(!e||isNaN(e)||e<=s)e=new Date(s.getTime()+36e5);
+  const p=n=>String(n).padStart(2,"0"),q=encodeURIComponent;
+  const f=d=>`${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
+  const tz=Intl.DateTimeFormat().resolvedOptions().timeZone,ds=a.description||"",lc=a.location||"";
+  const g=`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${q(a.title)}&dates=${f(s)}/${f(e)}&ctz=${q(tz)}&details=${q(ds)}&location=${q(lc)}`;
+  const i=`intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/event;S.title=${q(a.title)};S.description=${q(ds)};S.eventLocation=${q(lc)};l.beginTime=${s.getTime()};l.endTime=${e.getTime()};end`;
+  const d=document.createElement("div");d.className="ai";
+  const bd=document.createElement("b");bd.textContent="📅 "+a.title+" — "+s.toLocaleString([],{dateStyle:"medium",timeStyle:"short"});
+  d.append(bd,document.createElement("br"));
+  [[i,T("Save to phone calendar","Αποθήκευση στο ημερολόγιο")],[g,"Google Calendar"]].forEach(([h,t])=>{const x=document.createElement("a");x.href=h;x.textContent=t;if(h===g)x.target="_blank";x.style.cssText="color:#3ab6ff;margin-right:14px";d.append(x)});
+  $("log").prepend(d);
+  return T("Event ready. Tap the card to save it.","Το event είναι έτοιμο. Πάτα την κάρτα για αποθήκευση.");
+}
+const MODELS=["gemini-flash-lite-latest","gemini-flash-latest"],sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let stopRec=null;
+async function gem(){
+  const now=new Date().toLocaleString("en-GB",{dateStyle:"full",timeStyle:"short"})+" ("+Intl.DateTimeFormat().resolvedOptions().timeZone+")";
+  const body={systemInstruction:{parts:[{text:SYSTEM+" Current date and time: "+now+"."+foodNote()}]},tools:TOOLS,contents:hist,generationConfig:{maxOutputTokens:300}};
+  if(think)body.generationConfig.thinkingConfig={thinkingLevel:"minimal"};
+  for(const m of MODELS)for(let k=0;k<2;k++){
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{method:"POST",headers:{"content-type":"application/json","x-goog-api-key":S.get("gemini")},body:JSON.stringify(body)});
+    const j=await r.json();if(r.ok)return j;
+    const msg=j.error?.message||String(r.status);
+    if(think&&/think/i.test(msg)){think=false;delete body.generationConfig.thinkingConfig;k--;continue}
+    if(r.status==500||r.status==503){await sleep(700);continue}
+    if(r.status==404||r.status==429)break;
+    throw new Error(msg);
+  }
+  throw new Error(T("The model is busy right now. Please try again in a moment.","Το μοντέλο είναι φορτωμένο αυτή τη στιγμή. Δοκίμασε ξανά σε λίγο."));
+}
+function toWav(chunks,sr){
+  const len=chunks.reduce((a,c)=>a+c.length,0),x=new Float32Array(len);let o=0,pk=0;
+  for(const c of chunks){x.set(c,o);o+=c.length}
+  for(const v of x)pk=Math.max(pk,Math.abs(v));
+  const g=pk>0?Math.min(.9/pk,30):1,k=Math.max(1,Math.round(sr/16000)),rate=Math.round(sr/k),n=Math.floor(len/k);
+  const buf=new ArrayBuffer(44+n*2),v=new DataView(buf),w=(p,t)=>[...t].forEach((c,i)=>v.setUint8(p+i,c.charCodeAt(0)));
+  w(0,"RIFF");v.setUint32(4,36+n*2,true);w(8,"WAVEfmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,"data");v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){let a=0;for(let j=0;j<k;j++)a+=x[i*k+j];v.setInt16(44+i*2,Math.max(-1,Math.min(1,a/k*g))*32767,true)}
+  const b=new Uint8Array(buf);let bin="";for(let i=0;i<b.length;i+=8192)bin+=String.fromCharCode(...b.subarray(i,i+8192));
+  return btoa(bin);
+}
+async function recordAudio(){
+  const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+  const ctx=new AudioContext(),src=ctx.createMediaStreamSource(stream),proc=ctx.createScriptProcessor(4096,1,1),chunks=[];
+  let n=0,floor=0,started=false,quiet=0;const t0=Date.now();
+  return new Promise(res=>{
+    const done=()=>{proc.onaudioprocess=null;proc.disconnect();src.disconnect();stream.getTracks().forEach(t=>t.stop());const sr=ctx.sampleRate;ctx.close();stopRec=null;res(started?toWav(chunks,sr):null)};
+    stopRec=done;
+    proc.onaudioprocess=e=>{
+      const d=new Float32Array(e.inputBuffer.getChannelData(0));chunks.push(d);
+      const r=Math.sqrt(d.reduce((a,v)=>a+v*v,0)/d.length);
+      if(n++<4){floor=n==1?r:Math.min(floor,r);return}
+      if(r>floor*2.5+.003){started=true;quiet=0}else if(started){quiet+=d.length/ctx.sampleRate;if(quiet>1.3)done()}
+      if((Date.now()-t0)/1000>(started?15:8))done();
+    };
+    src.connect(proc);proc.connect(ctx.destination);
+  });
+}
+async function ask(text,audio){
+  playedNow=false;
+  if(hist.length>30)hist=[];
+  hist.push({role:"user",parts:audio?[{inlineData:{mimeType:"audio/wav",data:audio}}]:[{text}]});
+  const idx=hist.length-1;
+  try{
+    for(let i=0;i<5;i++){
+      const j=await gem();
+      const c=j.candidates?.[0]?.content;if(!c)return T("I have nothing to say to that.","Δεν έχω τι να πω γι' αυτό.");
+      hist.push(c);
+      const calls=(c.parts||[]).filter(p=>p.functionCall);
+      if(!calls.length)return (c.parts||[]).map(p=>p.text||"").join(" ").trim()||"OK.";
+      const res=[],outs=[];
+      for(const p of calls){const f=p.functionCall;let out;try{out=await tools[f.name](f.args||{})}catch(e){out="Error: "+e.message}outs.push(out);res.push({functionResponse:{...(f.id?{id:f.id}:{}),name:f.name,response:{result:out}}})}
+      hist.push({role:"user",parts:res});
+      if(calls.every(p=>FAST.includes(p.functionCall.name))){const m=outs.join(" ");hist.push({role:"model",parts:[{text:m}]});return m}
+    }
+    return T("Apologies, that got tangled.","Συγγνώμη, μπερδεύτηκα.");
+  }finally{if(audio)hist[idx]={role:"user",parts:[{text:"(spoken request)"}]}}
+}
+
+// ---------- Voice out ----------
+const GR=/[\u0370-\u03FF\u1F00-\u1FFF]/,TTS_MODELS=["gemini-3.1-flash-tts-preview","gemini-3.8-flash-lite-tts"];let ttsOff=0,ttsWhy="";
+async function geminiSpeak(text){
+  if(S.get("natural")==="0"||Date.now()<ttsOff)return false;
+  const pre=GR.test(text)?"Say in a calm, warm, natural, brisk conversational tone: ":"Say in a calm, refined, softly witty British butler voice at a brisk, natural pace: ";
+  for(const m of TTS_MODELS){
+    try{
+      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{method:"POST",headers:{"content-type":"application/json","x-goog-api-key":S.get("gemini")},body:JSON.stringify({contents:[{parts:[{text:(m.includes("3.8")?"":pre)+text}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:"Charon"}}}}})});
+      if(r.status==429){ttsOff=Date.now()+60000;ttsWhy="429";return false}
+      const j=await r.json(),d=j.candidates?.[0]?.content?.parts?.find(p=>p.inlineData)?.inlineData?.data;
+      if(!r.ok||!d){ttsWhy=(j.error?.message||"no audio").slice(0,90);continue}
+      const pcm=Uint8Array.from(atob(d),c=>c.charCodeAt(0)),h=new DataView(new ArrayBuffer(44)),w=(p,t)=>[...t].forEach((c,i)=>h.setUint8(p+i,c.charCodeAt(0)));
+      w(0,"RIFF");h.setUint32(4,36+pcm.length,true);w(8,"WAVEfmt ");h.setUint32(16,16,true);h.setUint16(20,1,true);h.setUint16(22,1,true);h.setUint32(24,24000,true);h.setUint32(28,48000,true);h.setUint16(32,2,true);h.setUint16(34,16,true);w(36,"data");h.setUint32(40,pcm.length,true);
+      const a=new Audio(URL.createObjectURL(new Blob([h,pcm],{type:"audio/wav"})));a.playbackRate=1.15;
+      await new Promise(res=>{a.onended=res;a.onerror=res;a.play().catch(res)});
+      return true;
+    }catch(e){ttsWhy=String(e.message||e).slice(0,90)}
+  }
+  return false;
+}
+
+async function speak(text){
+  log("ai",text);
+  const key=S.get("elKey"),voice=S.get("elVoice");
+  if(key&&voice){
+    try{
+      const r=await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_22050_32`,{method:"POST",headers:{"xi-api-key":key,"content-type":"application/json"},body:JSON.stringify({text,model_id:"eleven_flash_v2_5"})});
+      if(r.ok){const a=new Audio(URL.createObjectURL(await r.blob()));a.playbackRate=1.08;await new Promise(res=>{a.onended=res;a.onerror=res;a.play().catch(res)});return}
+    }catch(e){}
+  }
+  if(await geminiSpeak(text))return;
+  if(S.get("natural")!=="0"){const n=document.createElement("div");n.className="me";n.textContent="⚠ "+T("Gemini voice unavailable, using the phone voice: ","Η φωνή Gemini δεν είναι διαθέσιμη, χρησιμοποιώ τη φωνή του κινητού: ")+ttsWhy;$("log").prepend(n)}
+  await new Promise(res=>{
+    const gr=/[\u0370-\u03FF\u1F00-\u1FFF]/.test(text),L=gr?"el-GR":"en-GB";const u=new SpeechSynthesisUtterance(text);u.lang=L;u.pitch=.7;u.rate=1.1;
+    const vs=speechSynthesis.getVoices().filter(v=>v.lang.replace("_","-").toLowerCase()==L.toLowerCase()),v=vs.find(v=>/\bmale\b|rjs|gbd|george|daniel|ryan|nikos|stefanos/i.test(v.name)&&!/female/i.test(v.name))||vs[0];if(v)u.voice=v;
+    u.onend=res;u.onerror=res;speechSynthesis.speak(u);
+  });
+}
+
+// ---------- Wake word + listening ----------
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec,listening=false,busy=false,awakeUntil=0,lang=S.get("lang")||"en-US";
+function startRec(){
+  if(!SR){status("Speech recognition unsupported. Use Chrome on Android.");return}
+  rec=new SR();rec.continuous=true;rec.interimResults=false;rec.lang=lang;
+  rec.onresult=e=>{const t=e.results[e.results.length-1][0].transcript.trim();if(!busy)status(T("Heard: ","Άκουσα: ")+t);handle(t)};
+  rec.onend=()=>{if(listening&&!busy)try{rec.lang=lang;rec.start()}catch(e){}};
+  rec.onerror=e=>{if(e.error=="not-allowed"){listening=false;$("orb").className="";status("Microphone blocked. Allow it in site settings.")}};
+  rec.start();
+}
+const norm=x=>x.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/ς/g,"σ");
+const WAKE=/\b(?:jarvi[sz]?|jarvys|jarvas|jervis|gervais|yaris|yarvis|service|travis|garvis|darvis|charvis|harvis)\b|(?:ντ?)?(?:τζ|τσ|ζ|γι)[αε]ρ?β[ιηυ][σζ]?/;
+async function handle(t){
+  if(busy)return;
+  const n=norm(t),m0=WAKE.exec(n),m=m0&&m0.index<=12?m0:null;
+  let cmd=null;
+  if(m){cmd=t.slice(m.index+m[0].length).replace(/^[\s,.!?;:-]+/,"").trim();if(!cmd){awakeUntil=Date.now()+8000;status(T("Yes?","Ναι;"));return}}
+  else if(Date.now()<awakeUntil)cmd=t;
+  if(!cmd)return;
+  awakeUntil=0;busy=true;rec.stop();
+  log("me",cmd);status("Thinking…");
+  try{await reply(await ask(cmd))}catch(e){log("ai","Error: "+e.message);status("Error")}
+  busy=false;status("Say “Jarvis…”");
+  if(listening)try{rec.lang=lang;rec.start()}catch(e){}
+}
+const toggleWake=()=>{
+  listening=!listening;$("orb").className=listening?"on":"";$("orb").textContent=listening?"Listening":"Tap to start";
+  if(listening){startRec();status("Say “Jarvis…”")}else{rec&&rec.stop();status("Paused")}
+};
+let recording=false,mode=S.get("mode")||"tap";
+$("orb").onclick=async()=>{
+  if(mode!="tap")return toggleWake();
+  if(busy)return;
+  if(recording){stopRec&&stopRec();return}
+  recording=true;$("orb").className="on";status(T("Listening… (tap to finish)","Ακούω… (πάτα για να τελειώσεις)"));
+  let a;
+  try{a=await recordAudio()}catch(e){recording=false;$("orb").className="";status(T("Microphone blocked. Allow it in site settings.","Το μικρόφωνο μπλοκαρίστηκε. Επέτρεψέ το στις ρυθμίσεις του site."));return}
+  recording=false;$("orb").className="";
+  keepMusic();
+  if(!a){status(T("I didn't hear anything. Tap and speak.","Δεν άκουσα τίποτα. Πάτα και μίλα."));return}
+  busy=true;log("me","🎤");status(T("Thinking…","Σκέφτομαι…"));
+  try{await reply(await ask("",a))}catch(e){log("ai","Error: "+e.message);status("Error")}
+  busy=false;status(T("Tap and speak","Πάτα και μίλα"));
+};
+
+const setLang=()=>$("langBtn").textContent=lang=="el-GR"?"Ακούω: Ελληνικά (πάτα για English)":"Listening: English (tap for Ελληνικά)";
+$("langBtn").onclick=()=>{lang=lang=="el-GR"?"en-US":"el-GR";S.set("lang",lang);setLang();if(listening&&rec&&!busy)rec.stop()};
+setLang();
+const setMode=()=>{$("modeBtn").textContent=mode=="tap"?"Mode: Tap to talk (Greek + English) — tap to switch":"Mode: “Jarvis” wake word — tap to switch";$("langBtn").style.display=mode=="tap"?"none":"";$("orb").textContent=mode=="tap"?"Tap & speak":"Tap to start";status(mode=="tap"?"Tap the orb and speak Greek or English":"Tap the orb, then say “Jarvis…”")};
+$("modeBtn").onclick=()=>{if(listening){listening=false;rec&&rec.stop();$("orb").className=""}mode=mode=="tap"?"wake":"tap";S.set("mode",mode);setMode()};
+setMode();renderFood();renderAl();keepAwake();
+
+// ---------- Settings ----------
+const fields=["gemini","spotifyId","elKey","elVoice"];
+fields.forEach(f=>$(f).value=S.get(f));
+$("natural").checked=S.get("natural")!=="0";$("natural").onchange=()=>S.set("natural",$("natural").checked?"1":"0");
+$("save").onclick=()=>{fields.forEach(f=>S.set(f,$(f).value.trim()));$("spstat").textContent="Saved."};
+$("conn").onclick=()=>{fields.forEach(f=>S.set(f,$(f).value.trim()));spLogin()};
+(async()=>{
+  const code=new URLSearchParams(location.search).get("code");
+  if(code){await tokenReq({grant_type:"authorization_code",code,redirect_uri:REDIRECT,code_verifier:S.get("verifier")});history.replaceState({},"",REDIRECT)}
+  $("spstat").textContent=S.get("spTok")?"Spotify connected.":"Spotify not connected.";
+})();
+</script></body></html>
