@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis</title>
+<style>
+:root{--bg:#0a0f16;--card:#121a24;--line:#1f2d3d;--txt:#e8f1fb;--mut:#8196ab;--acc:#3ab6ff}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:radial-gradient(120% 60% at 50% -10%,#10263a 0,var(--bg) 60%) fixed;color:var(--txt);min-height:100vh;padding:14px 16px 96px}
+header{max-width:520px;margin:0 auto 8px;text-align:center;font-weight:700;letter-spacing:.35em;color:#9fd8ff;font-size:12px}
+main{max-width:520px;margin:0 auto}
+.view{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px}
+.hero{display:flex;flex-direction:column;align-items:center;padding:14px 0 2px}
+#orb{width:150px;height:150px;border-radius:50%;border:0;color:#cfeeff;font-size:15px;font-weight:600;background:radial-gradient(circle at 35% 30%,#2a7fb5,#0c2335 70%);box-shadow:0 0 0 2px #3ab6ff55,0 10px 40px #3ab6ff44}
+#orb.on{animation:p 1.6s infinite}
+@keyframes p{50%{box-shadow:0 0 0 6px #3ab6ff33,0 10px 60px #3ab6ff99}}
+#status{margin-top:14px;color:var(--mut);font-size:14px;text-align:center}
+.chip,.s{border:0;border-radius:12px;padding:10px 14px;background:#1b2a3a;color:var(--txt);font-weight:600;font-size:14px}
+.primary{background:var(--acc);color:#04121c}
+.s.ghost{background:transparent;color:var(--mut);padding:6px 10px}
+.wide{width:100%;padding:14px;font-size:15px}
+.chip{align-self:center;font-size:12px;color:var(--mut);padding:6px 12px;border-radius:99px;background:var(--card);border:1px solid var(--line)}
+#log:empty{display:none}
+#log{max-height:38vh;overflow-y:auto}
+#log div{padding:7px 0;line-height:1.45;font-size:14px;border-bottom:1px solid var(--line)}
+#log div:last-child{border:0}
+.me{color:var(--mut)}.ai{color:var(--txt)}
+details summary{font-weight:600;cursor:pointer}
+input{width:100%;margin:6px 0;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#0d141c;color:var(--txt);font-size:14px}
+input[type=range]{padding:0}input[type=checkbox]{width:auto;margin-right:8px}
+label{display:block;margin:10px 0 2px;color:var(--mut);font-size:13px}
+.lbl{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.big{font-size:44px;font-weight:700;line-height:1.1;margin:4px 0}.big small{font-size:16px;color:var(--mut);font-weight:500}
+.big2{font-size:30px;font-weight:700}
+.mut{color:var(--mut);font-size:13px}
+.bar{display:flex;height:10px;border-radius:99px;overflow:hidden;background:#0d141c;margin:12px 0 8px;gap:2px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--mut)}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.item{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.item .grow{flex:1}.item small{display:block;color:var(--mut);font-size:12px}
+.empty{padding-top:8px}
+.btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+#nav{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:6px;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:#0b121bd9;backdrop-filter:blur(14px);border-top:1px solid var(--line);z-index:5}
+#nav button{flex:1;max-width:160px;border:0;background:transparent;color:var(--mut);font-size:20px;padding:6px 0;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:2px}
+#nav button span{font-size:11px;font-weight:600}
+#nav button.on{color:var(--acc);background:#3ab6ff1a}
+.seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:3px}
+.seg button{flex:1;border:0;background:transparent;color:var(--mut);padding:8px;border-radius:9px;font-weight:600;font-size:14px}
+.seg button.on{background:#1b2a3a;color:var(--txt)}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.col{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 8px;min-width:0}
+.ch{font-weight:700;font-size:13px;color:var(--c);display:flex;justify-content:space-between}
+.ch small{color:var(--mut);font-weight:600}
+.tot{font-size:17px;font-weight:700;margin:2px 0 8px}
+.xitem{border-top:1px solid var(--line);padding:7px 0;font-size:12.5px}
+.xn{word-break:break-word}
+.xb{display:flex;align-items:center;justify-content:space-between}
+.xb small{color:var(--mut);font-size:10.5px}
+.xb .s{padding:2px 6px;font-size:12px}
+.np{text-align:center}
+.np img{width:200px;height:200px;border-radius:16px;object-fit:cover;background:#0d141c;box-shadow:0 12px 40px #0008}
+.mt{font-size:20px;font-weight:700;margin-top:12px}
+.prog{height:5px;background:#0d141c;border-radius:9px;margin:14px 0 6px;overflow:hidden}
+#mBar{height:100%;width:0;background:var(--acc)}
+.ctrl{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:10px}
+.round{width:64px;height:64px;border-radius:50%;font-size:24px;padding:0}
+.s.on{color:var(--acc)}
+.th{width:44px;height:44px;border-radius:8px;object-fit:cover}
+.row input{margin:0}
+#quoteCard{border-left:3px solid var(--acc)}
+.qt{font-size:16px;line-height:1.5;margin-top:6px}
+.qa{color:var(--mut);margin:6px 0;font-size:13px;line-height:1.45}
+</style></head><body>
+<header>J.A.R.V.I.S</header>
+<main>
+<section id="mainView" class="view">
+  <div class="seg" id="modeSeg"><button data-m="wake">🎙 Wake word</button><button data-m="tap">👆 Tap to talk</button><button data-m="text">⌨️ Type</button></div>
+  <div class="seg" id="langSeg"><button data-l="el-GR">🇬🇷 Ελληνικά</button><button data-l="en-US">🇬🇧 English</button></div>
+  <div id="repBanner" class="card" style="display:none;cursor:pointer"></div>
+  <div id="quoteCard" class="card" style="display:none"></div>
+  <div class="hero" id="voiceBox"><button id="orb">Tap to start</button><div id="status">Tap the orb</div></div>
+  <div id="typeBox" class="card" style="display:none"><div class="row"><input id="txt" placeholder="Write in Greek or English…"><button class="s primary" id="txtGo">Send</button></div></div>
+  <div id="log" class="card"></div>
+  <details class="card" id="alBox"><summary id="alSum">⏰ Alarms</summary><div id="alarms"></div></details>
+  <details class="card"><summary>⚙️ Settings</summary>
+    <input id="gemini" type="password" placeholder="Google Gemini API key">
+    <input id="spotifyId" placeholder="Spotify Client ID">
+    <input id="elKey" type="password" placeholder="ElevenLabs API key (optional)">
+    <input id="elVoice" placeholder="ElevenLabs voice ID (optional)">
+    <label>Voice speed <span id="spdv"></span></label><input type="range" id="speed" min="0.7" max="1.4" step="0.05">
+    <label>Pause patience <span id="patv"></span></label><input type="range" id="patience" min="1" max="5" step="0.5">
+    <label><input type="checkbox" id="natural">Natural voice (Gemini, free but limited)</label>
+    <div class="btns" style="justify-content:flex-start;margin-top:8px"><button class="s primary" id="save">Save</button><button class="s" id="testBtn">Test voice</button><button class="s" id="conn">Connect Spotify</button></div>
+    <div id="spstat" class="mut" style="margin-top:8px"></div>
+  </details>
+</section>
+<section id="calView" class="view" style="display:none">
+  <div class="card row"><button class="s" id="dPrev">◀</button><div id="dLbl" style="font-weight:700"></div><button class="s" id="dNext">▶</button></div>
+  <div class="card"><div class="lbl">Today</div><div class="big"><span id="calTotal">0</span> <small>kcal</small></div><div id="calProt" class="mut"></div><div id="calBar" class="bar"></div><div id="calLegend" class="legend"></div></div>
+  <div id="meals" class="view"></div>
+  <div class="card"><div class="row"><div><div class="lbl">💧 Water</div><div class="big2"><span id="waterTotal">0</span> L</div></div><div class="btns"><button class="s primary" id="w250">+0.25 L</button><button class="s primary" id="w500">+0.5 L</button><button class="s ghost" id="wUndo">Undo</button></div></div></div>
+  <div id="calHist"></div>
+</section>
+<section id="musicView" class="view" style="display:none">
+  <div class="card np"><img id="mArt" alt="" style="visibility:hidden"><div id="mTitle" class="mt">—</div><div id="mArtist" class="mut"></div>
+    <div class="prog"><div id="mBar"></div></div><div id="mTime" class="mut"></div>
+    <div class="ctrl"><button class="s ghost" id="mShuf">🔀</button><button class="s" id="mPrev">⏮</button><button class="s primary round" id="mPlay">▶</button><button class="s" id="mNext">⏭</button><button class="s ghost" id="mRep">🔁</button></div></div>
+  <div class="card"><div class="row"><input id="mQ" placeholder="Search song or artist"><button class="s primary" id="mGo">Search</button></div><div id="mRes"></div></div>
+</section>
+<section id="goalsView" class="view" style="display:none">
+  <div class="card"><div class="lbl">Monthly goals</div>
+    <label>Daily calories (kcal)</label><input id="g_kcal" type="number" inputmode="decimal">
+    <label>Daily protein (g)</label><input id="g_protein" type="number" inputmode="decimal">
+    <label>Daily water (L)</label><input id="g_water" type="number" step="0.1" inputmode="decimal">
+    <label>Monthly budget (€)</label><input id="g_budget" type="number" inputmode="decimal">
+    <label>Max "Wasted" per month (€)</label><input id="g_wasteMax" type="number" inputmode="decimal">
+    <label>Other goals (used in the AI comment)</label><input id="g_notes" placeholder="e.g. less sugar, walk daily">
+    <button class="s primary wide" id="g_save" style="margin-top:10px">Save goals</button></div>
+  <div class="card"><div class="lbl">This month</div><div id="gProg"></div></div>
+  <button class="s wide" id="repNow">📊 Generate today's report now</button>
+  <div id="reports" class="view"></div>
+</section>
+<section id="expView" class="view" style="display:none">
+  <div class="seg" id="perSeg"><button data-p="day">Today</button><button data-p="week">Week</button><button data-p="month">Month</button></div>
+  <div class="card"><div class="lbl">Total spent</div><div class="big" id="expTotal">0.00€</div><div id="expSum" class="mut"></div><div id="expBar" class="bar"></div></div>
+  <div class="cols">
+    <div class="col"><div class="ch" style="--c:#4caf50">Needs<small id="p_needed"></small></div><div class="tot" id="t_needed"></div><div id="col_needed"></div></div>
+    <div class="col"><div class="ch" style="--c:#f0b429">Wants<small id="p_okay"></small></div><div class="tot" id="t_okay"></div><div id="col_okay"></div></div>
+    <div class="col"><div class="ch" style="--c:#ff5a5a">Wasted<small id="p_waste"></small></div><div class="tot" id="t_waste"></div><div id="col_waste"></div></div>
+  </div>
+  <button class="s primary wide" id="scanBtn">📷 Scan receipt</button>
+  <input type="file" id="scanIn" accept="image/*" style="display:none">
+  <div id="scanOut"></div>
+</section>
+</main>
+<nav id="nav"><button id="tabJ" class="on">🎙<span>Jarvis</span></button><button id="tabM">🎵<span>Music</span></button><button id="tabC">🍽<span>Calories</span></button><button id="tabG">🎯<span>Goals</span></button><button id="tabE">💸<span>Expenses</span></button></nav>
+<script>
+const $=id=>document.getElementById(id);
+const S={get(k){try{return localStorage.getItem(k)||""}catch(e){return ""}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const log=(w,t)=>{const d=document.createElement("div");d.className=w;d.textContent=(w=="me"?"You: ":"Jarvis: ")+t;$("log").prepend(d)};
+const status=t=>$("status").textContent=t;
+
+// ---------- Spotify (PKCE, no server) ----------
+const REDIRECT=location.origin+location.pathname;
+const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+async function spLogin(){
+  const id=S.get("spotifyId");if(!id){alert("Save your Spotify Client ID first");return}
+  const v=b64(crypto.getRandomValues(new Uint8Array(32)));S.set("verifier",v);
+  const c=b64(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v)));
+  location=`https://accounts.spotify.com/authorize?${new URLSearchParams({client_id:id,response_type:"code",redirect_uri:REDIRECT,scope:"user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative",code_challenge_method:"S256",code_challenge:c})}`;
+}
+async function tokenReq(p){
+  const r=await fetch("https://accounts.spotify.com/api/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:S.get("spotifyId"),...p})});
+  const j=await r.json();
+  if(j.access_token){S.set("spTok",j.access_token);S.set("spExp",Date.now()+j.expires_in*1000-60000);if(j.refresh_token)S.set("spRef",j.refresh_token)}
+}
+async function spToken(){
+  if(!S.get("spTok"))return null;
+  if(Date.now()>+S.get("spExp"))await tokenReq({grant_type:"refresh_token",refresh_token:S.get("spRef")});
+  return S.get("spTok");
+}
+async function sp(path,opt={}){
+  const t=await spToken();if(!t)throw new Error("Spotify not connected");
+  return fetch("https://api.spotify.com/v1"+path,{...opt,headers:{Authorization:"Bearer "+t,"Content-Type":"application/json"}});
+}
+const tools={
+  async play_song({title,artist,query}){
+    cands=(await findTracks(title||query||"",artist||"")).slice(0,6);ci=0;
+    return cands.length?startTrack(cands[0]):T("No results for "+(title||query),"Δεν βρέθηκε: "+(title||query));
+  },
+  async play_songs({songs,play_now}){
+    const found=[],miss=[];
+    for(const q of songs||[]){const c=await findTracks(q.title||"",q.artist||"");c.length?found.push(c[0]):miss.push(q.title)}
+    if(!found.length)return T("I couldn't find those songs.","Δεν βρήκα αυτά τα τραγούδια.");
+    let i=0;
+    if(play_now!==false){const m=await startTrack(found[0]);if(!musicOn)return m;i=1}
+    for(;i<found.length;i++){const r=await sp("/me/player/queue?uri="+encodeURIComponent(found[i].uri),{method:"POST"});if(r.status==404)return T("No active Spotify device. Open the Spotify app and play anything once.","Δεν υπάρχει ενεργή συσκευή Spotify. Άνοιξε την εφαρμογή και παίξε κάτι μία φορά.")}
+    playedNow=true;
+    return T(`Queued ${found.length} songs`+(miss.length?`, couldn't find: ${miss.join(", ")}`:"")+".",`Μπήκαν στη σειρά ${found.length} τραγούδια`+(miss.length?`, δεν βρήκα: ${miss.join(", ")}`:"")+".");
+  },
+  async play_playlist({name}){
+    const want=key(name||"");let uri=null,label="";
+    try{const r=await sp("/me/playlists?limit=50");if(r.status==200){const p=(await r.json()).items.find(x=>x&&(key(x.name).includes(want)||want.includes(key(x.name))));if(p){uri=p.uri;label=p.name}}}catch(e){}
+    if(!uri){const j=await (await sp("/search?"+new URLSearchParams({q:name,type:"playlist",limit:5}))).json();const p=(j.playlists?.items||[]).find(Boolean);if(p){uri=p.uri;label=p.name}}
+    if(!uri)return T("I couldn't find that playlist.","Δεν βρήκα αυτό το playlist.");
+    const r=await sp("/me/player/play",{method:"PUT",body:JSON.stringify({context_uri:uri})});
+    if(r.status==404)return T("No active Spotify device. Open the Spotify app and play anything once.","Δεν υπάρχει ενεργή συσκευή Spotify. Άνοιξε την εφαρμογή και παίξε κάτι μία φορά.");
+    musicOn=true;playedNow=true;return T(`Playing playlist ${label}.`,`Παίζει το playlist ${label}.`);
+  },
+  async resume_music(){await sp("/me/player/play",{method:"PUT"});musicOn=true;playedNow=true;return T("Resuming.","Συνεχίζω.")},
+  remove_entry({kind,match,days_ago}){
+    const exp=kind=="expense",f=exp?loadExp():loadFood(),want=words(match||""),ks=days_ago!=null?[dayKeyOff(+days_ago)]:Object.keys(f).sort().reverse().slice(0,30);
+    for(const k of ks){const a=f[k]||[];for(let i=a.length-1;i>=0;i--){const dn=key(a[i].d);if(!want.length||want.some(w=>dn.includes(w))){const m=a.splice(i,1)[0];if(exp){saveExp(f);renderExp()}else{saveFood(f);renderFood()}return T(`Removed ${m.d} (${k}).`,`Αφαιρέθηκε: ${m.d} (${k}).`)}}}
+    return T("I couldn't find that entry.","Δεν βρήκα αυτή την εγγραφή.");
+  },
+  async pause_music(){await sp("/me/player/pause",{method:"PUT"});musicOn=false;return T("Paused.","Σε παύση.")},
+  create_event:a=>eventCard(a),
+  log_expense({description,amount,category}){
+    const arr=addExp(description,amount,category),m=arr[arr.length-1],t=sumExp(arr);
+    return T(`Logged: ${m.d}, ${eur(m.a)} (${m.c}). Today: ${eur(t.all)}.`,`Καταγράφηκε: ${m.d}, ${eur(m.a)} (${CNAME()[m.c]}). Σήμερα: ${eur(t.all)}.`);
+  },
+  remove_last_expense(){
+    const f=loadExp(),k=dayKey(),a=f[k]||[];if(!a.length)return T("Nothing to remove.","Δεν υπάρχει τίποτα να αφαιρεθεί.");
+    const m=a.pop();f[k]=a;saveExp(f);renderExp();return T(`Removed ${m.d}.`,`Αφαιρέθηκε: ${m.d}.`);
+  },
+  async web_search({query,language}){return searchWeb(query,language)},
+  set_alarm({time,label}){
+    const d=new Date(time);if(isNaN(d)||d.getTime()<=Date.now())return T("I couldn't read that time.","Δεν κατάλαβα την ώρα.");
+    const a=loadAl();a.push({ts:d.getTime(),label:String(label||"").slice(0,60)});saveAl(a);renderAl();keepAwake();(alarmCtx=alarmCtx||new AudioContext()).resume();
+    const hm=d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+    return T(`Alarm set for ${hm}. Keep this page open with the screen on.`,`Το ξυπνητήρι ορίστηκε για τις ${hm}. Κράτα τη σελίδα ανοιχτή με την οθόνη αναμμένη.`);
+  },
+  cancel_alarms(){saveAl([]);renderAl();return T("All alarms cancelled.","Όλα τα ξυπνητήρια ακυρώθηκαν.")},
+  log_meal({description,calories,protein_g,meal}){
+    const f=loadFood(),k=dayKey(),a=f[k]||[];
+    a.push({t:hm(),d:String(description||"").slice(0,80),k:Math.round(+calories||0),p:Math.round((+protein_g||0)*10)/10,m:MEALS.includes(meal)?meal:guessMeal()});
+    f[k]=a;saveFood(f);renderFood();const t=totals(a),m=a[a.length-1];
+    return T(`Logged for ${m.m}: ${m.d}, about ${m.k} kcal and ${m.p} g protein. Today so far: ${t.k} kcal, ${Math.round(t.p)} g protein.`,`Καταγράφηκε (${MNAME()[m.m]}): ${m.d}, περίπου ${m.k} kcal και ${m.p} g πρωτεΐνη. Σήμερα μέχρι τώρα: ${t.k} kcal, ${Math.round(t.p)} g πρωτεΐνη.`);
+  },
+  remove_last_meal(){
+    const f=loadFood(),k=dayKey(),a=f[k]||[];
+    if(!a.length)return T("There is nothing to remove today.","Δεν υπάρχει κάτι να αφαιρεθεί σήμερα.");
+    const m=a.pop();f[k]=a;saveFood(f);renderFood();const t=totals(a);
+    return T(`Removed ${m.d}. Today: ${t.k} kcal, ${Math.round(t.p)} g protein.`,`Αφαιρέθηκε: ${m.d}. Σήμερα: ${t.k} kcal, ${Math.round(t.p)} g πρωτεΐνη.`);
+  },
+  log_water({liters}){
+    const l=+liters;if(!(l>0))return T("I couldn't read that amount.","Δεν κατάλαβα την ποσότητα.");
+    const tot=addWater(l);return T(`Added ${l} L. Water today: ${tot} L.`,`Προστέθηκαν ${l} L. Νερό σήμερα: ${tot} L.`);
+  }
+};
+
+const GRM={α:"a",β:"v",γ:"g",δ:"d",ε:"e",ζ:"z",η:"i",θ:"th",ι:"i",κ:"k",λ:"l",μ:"m",ν:"n",ξ:"x",ο:"o",π:"p",ρ:"r",σ:"s",τ:"t",υ:"i",φ:"f",χ:"ch",ψ:"ps",ω:"o"};
+const key=x=>x.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/ς/g,"σ").replace(/[^\p{L}\p{N} ]/gu," ")
+  .replace(/ου/g,"u").replace(/αι/g,"e").replace(/ει|οι|υι/g,"i").replace(/μπ/g,"b").replace(/ντ/g,"d").replace(/γκ/g,"g").replace(/τσ/g,"ts")
+  .replace(/[α-ω]/g,c=>GRM[c]||c)
+  .replace(/ou/g,"u").replace(/ai/g,"e").replace(/ei|oi|ee|y/g,"i").replace(/ph/g,"f").replace(/kh|ch/g,"h").replace(/(.)\1+/g,"$1").replace(/\s+/g," ").trim();
+const words=x=>{const w=key(x).split(" ").filter(Boolean),l=w.filter(q=>q.length>2);return [...new Set(l.length?l:w)]};
+let cands=[],ci=0;
+async function startTrack(t){
+  const p=await sp("/me/player/play",{method:"PUT",body:JSON.stringify({uris:[t.uri]})});
+  if(p.status==404)return T("No active Spotify device. Open the Spotify app, play anything once, then retry.","Δεν υπάρχει ενεργή συσκευή Spotify. Άνοιξε την εφαρμογή, παίξε ένα τραγούδι και ξαναδοκίμασε.");
+  if(p.status==403)return T("Spotify refused. Premium is required.","Το Spotify αρνήθηκε. Χρειάζεται Premium.");
+  musicOn=true;playedNow=true;
+  return T(`Now playing ${t.name} by ${t.artists[0].name}.`,`Παίζει τώρα: ${t.name} από ${t.artists[0].name}.`);
+}
+async function findTracks(title,artist){
+  const tk=words(title),ak=words(artist),kt=key(title),map=new Map();
+  const qs=[artist?`track:${title} artist:${artist}`:`track:${title}`,`${title} ${artist}`.trim(),`${kt} ${key(artist)}`.trim()];
+  for(const q of qs){
+    const r=await sp("/search?"+new URLSearchParams({q,type:"track",limit:10}));
+    for(const t of (await r.json()).tracks?.items||[]){
+      const tn=key(t.name),an=key(t.artists.map(a=>a.name).join(" "));
+      const sc=(tk.length?tk.filter(w=>tn.includes(w)).length/tk.length:0)*2+(ak.length?ak.filter(w=>an.includes(w)).length/ak.length:0)+(tn==kt?1:0)+(t.popularity||0)/1000;
+      map.set(t.uri,{t,sc});
+    }
+    if([...map.values()].some(v=>v.sc>=2.9+(ak.length?1:0)))break;
+  }
+  return [...map.values()].sort((a,b)=>b.sc-a.sc).map(v=>v.t);
+}
+let musicOn=false,playedNow=false;
+async function keepMusic(){
+  if(!musicOn)return;
+  try{await sleep(600);const r=await sp("/me/player");if(r.status==200&&!(await r.json()).is_playing)await sp("/me/player/play",{method:"PUT"})}catch(e){}
+}
+async function reply(r){if(playedNow){playedNow=false;log("ai",r)}else await speak(r);await keepMusic()}
+
+// ---------- Calories & water ----------
+const dayKey=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const dayKeyOff=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+let calOff=0;
+const MEALS=["breakfast","lunch","snack","dinner"],MCOL={breakfast:"#ffb454",lunch:"#4cc38a",snack:"#c792ea",dinner:"#3ab6ff"};
+const MNAME=()=>({breakfast:T("Breakfast","Πρωινό"),lunch:T("Lunch","Μεσημεριανό"),snack:T("Snacks","Σνακ"),dinner:T("Dinner","Βραδινό")});
+const loadFood=()=>{try{return JSON.parse(S.get("food")||"{}")}catch(e){return {}}};
+const saveFood=f=>S.set("food",JSON.stringify(f));
+const loadWater=()=>{try{return JSON.parse(S.get("water")||"{}")}catch(e){return {}}};
+const saveWater=f=>S.set("water",JSON.stringify(f));
+const totals=a=>a.reduce((o,m)=>({k:o.k+m.k,p:o.p+m.p}),{k:0,p:0});
+const mealOf=m=>MEALS.includes(m.m)?m.m:"snack";
+const guessMeal=()=>{const n=new Date(),h=n.getHours()+n.getMinutes()/60;return h<11?"breakfast":h<15.5?"lunch":h<18?"snack":"dinner"};
+const waterSum=a=>Math.round(a.reduce((o,w)=>o+w.l,0)*100)/100;
+const hm=()=>{const n=new Date();return String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0")};
+function bar(id,segs){const t=segs.reduce((o,x)=>o+x[0],0),b=$(id);b.textContent="";segs.forEach(([v,c])=>{if(v>0&&t>0){const d=document.createElement("div");d.style.cssText=`flex:${v};background:${c}`;b.append(d)}})}
+function addWater(l,off=0){const w=loadWater(),k=dayKeyOff(off),a=w[k]||[];a.push({t:hm(),l:Math.round(l*100)/100});w[k]=a;saveWater(w);renderFood();return waterSum(a)}
+function renderFood(){
+  const f=loadFood(),k=dayKeyOff(calOff),today=f[k]||[],t=totals(today),N=MNAME();
+  $("dLbl").textContent=calOff==0?T("Today","Σήμερα"):calOff==1?T("Yesterday","Χθες"):k;$("dNext").style.visibility=calOff?"visible":"hidden";
+  $("calTotal").textContent=t.k;$("calProt").textContent=`${Math.round(t.p)} g ${T("protein","πρωτεΐνη")}`;
+  const per=MEALS.map(m=>({m,a:today.filter(x=>mealOf(x)==m)}));
+  bar("calBar",per.map(o=>[totals(o.a).k,MCOL[o.m]]));
+  const lg=$("calLegend");lg.textContent="";
+  per.forEach(o=>{const sp=document.createElement("span"),i=document.createElement("i");i.style.background=MCOL[o.m];sp.append(i,N[o.m]);lg.append(sp)});
+  const box=$("meals");box.textContent="";
+  per.forEach(o=>{
+    const c=document.createElement("div");c.className="card";
+    const h=document.createElement("div");h.className="row";
+    const hl=document.createElement("b");hl.textContent=N[o.m];
+    const hk=document.createElement("span");hk.className="mut";hk.textContent=`${totals(o.a).k} kcal`;h.append(hl,hk);c.append(h);
+    if(!o.a.length){const e=document.createElement("div");e.className="mut empty";e.textContent=T("Nothing logged","Τίποτα ακόμα");c.append(e)}
+    o.a.forEach(m=>{
+      const r=document.createElement("div");r.className="item";
+      const lt=document.createElement("div");lt.className="grow";lt.textContent=m.d;
+      const sm=document.createElement("small");sm.textContent=`${m.t} · ${m.p} g ${T("protein","πρωτεΐνη")}`;lt.append(sm);
+      const kk=document.createElement("b");kk.textContent=`${m.k} kcal`;
+      const x=document.createElement("button");x.textContent="✕";x.className="s ghost";
+      x.onclick=()=>{today.splice(today.indexOf(m),1);f[k]=today;saveFood(f);renderFood()};
+      r.append(lt,kk,x);c.append(r);
+    });
+    box.append(c);
+  });
+  const w=loadWater();$("waterTotal").textContent=waterSum(w[k]||[]);
+  const hist=$("calHist");hist.textContent="";
+  Object.keys(f).filter(d=>d!=k).sort().reverse().slice(0,7).forEach(d=>{const q=totals(f[d]),r=document.createElement("div");r.className="mut";r.style.padding="4px 2px";r.textContent=`${d}: ${q.k} kcal · ${Math.round(q.p)} g · 💧 ${waterSum(w[d]||[])} L`;hist.append(r)});
+}
+$("w250").onclick=()=>addWater(.25,calOff);$("w500").onclick=()=>addWater(.5,calOff);
+$("dPrev").onclick=()=>{calOff++;renderFood()};$("dNext").onclick=()=>{if(calOff>0){calOff--;renderFood()}};
+$("wUndo").onclick=()=>{const w=loadWater(),k=dayKeyOff(calOff),a=w[k]||[];a.pop();w[k]=a;saveWater(w);renderFood()};
+function foodNote(){
+  const k=dayKey(),a=loadFood()[k]||[],t=totals(a),N=MEALS.map(m=>{const x=a.filter(y=>mealOf(y)==m);return x.length?`${m}: ${x.map(y=>y.d+" "+y.k+" kcal").join(", ")}`:""}).filter(Boolean);
+  return ` Food log today: ${t.k} kcal, ${Math.round(t.p)} g protein`+(N.length?" ("+N.join("; ")+")":"")+`. Water today: ${waterSum(loadWater()[k]||[])} L.`;
+}
+
+// ---------- Alarms (ring only while this page is open) ----------
+let alarmCtx,ringing=null,wl=null;
+const loadAl=()=>{try{return JSON.parse(S.get("alarms")||"[]")}catch(e){return []}};
+const saveAl=a=>S.set("alarms",JSON.stringify(a));
+function renderAl(){
+  const a=loadAl().sort((x,y)=>x.ts-y.ts),box=$("alarms");box.textContent="";
+  $("alSum").textContent=`⏰ ${T("Alarms","Ξυπνητήρια")} (${a.length})`;
+  a.forEach(m=>{const r=document.createElement("div");r.textContent=new Date(m.ts).toLocaleString([],{weekday:"short",hour:"2-digit",minute:"2-digit"})+(m.label?" — "+m.label:"")+" ";const x=document.createElement("button");x.textContent="✕";x.className="s";x.style.padding="2px 8px";x.onclick=()=>{saveAl(loadAl().filter(q=>q.ts!==m.ts));renderAl()};r.append(x);box.append(r)});
+}
+async function keepAwake(){try{if(loadAl().length&&!wl){wl=await navigator.wakeLock.request("screen");wl.onrelease=()=>{wl=null}}}catch(e){}}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState=="visible")keepAwake()});
+function ring(m){
+  ringing=m;const ctx=alarmCtx=alarmCtx||new AudioContext();ctx.resume();
+  const beep=()=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=880;g.gain.value=.4;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+.25)};
+  const iv=setInterval(()=>{beep();setTimeout(beep,350);navigator.vibrate&&navigator.vibrate([400,200,400])},1500);
+  const b=document.createElement("button");b.style.cssText="position:fixed;inset:0;z-index:9;font-size:28px;background:#ff5a5a;color:#fff;border:0";
+  b.textContent="⏰ "+(m.label||T("Alarm","Ξυπνητήρι"))+" — "+T("tap to stop","πάτα για να σταματήσει");
+  b.onclick=()=>{clearInterval(iv);b.remove();ringing=null};document.body.append(b);
+}
+setInterval(()=>{
+  if(ringing)return;const now=Date.now(),a=loadAl(),past=a.filter(m=>m.ts<=now);
+  if(past.length){saveAl(a.filter(m=>m.ts>now));renderAl();const live=past.filter(m=>now-m.ts<300000);if(live.length)ring(live[0])}
+},1000);
+
+// ---------- Expenses ----------
+const CATS={needed:"#4caf50",okay:"#f0b429",waste:"#ff5a5a"};
+const CNAME=()=>({needed:"Needs",okay:"Wants",waste:"Wasted"});
+const loadExp=()=>{try{return JSON.parse(S.get("exp")||"{}")}catch(e){return {}}};
+const saveExp=f=>S.set("exp",JSON.stringify(f));
+const sumExp=a=>{const o={needed:0,okay:0,waste:0,all:0};a.forEach(m=>{o[m.c]=(o[m.c]||0)+m.a;o.all+=m.a});return o};
+const eur=n=>(Math.round(n*100)/100).toFixed(2)+"€";
+let expPeriod="day";
+function renderExp(){
+  const f=loadExp(),now=new Date(),col={needed:[],okay:[],waste:[]},t0=new Date(now.getFullYear(),now.getMonth(),now.getDate()),all=[];
+  Object.keys(f).forEach(d=>{
+    const dt=new Date(d+"T00:00:00"),age=Math.round((t0-dt)/864e5);
+    if(expPeriod=="day"?age==0:expPeriod=="week"?(age>=0&&age<7):(dt.getMonth()==now.getMonth()&&dt.getFullYear()==now.getFullYear()))f[d].forEach(m=>all.push({m,d,arr:f[d]}));
+  });
+  const t=sumExp(all.map(x=>x.m)),days=expPeriod=="day"?1:expPeriod=="week"?7:now.getDate();
+  $("expTotal").textContent=eur(t.all);
+  $("expSum").textContent=`${T("Avg/day","Μ.Ο./ημέρα")} ${eur(t.all/days)} · ${all.length} ${T("items","εγγραφές")}`;
+  bar("expBar",[[t.needed,CATS.needed],[t.okay,CATS.okay],[t.waste,CATS.waste]]);
+  ["needed","okay","waste"].forEach(c=>{$("t_"+c).textContent=eur(t[c]);$("p_"+c).textContent=(t.all?Math.round(t[c]/t.all*100):0)+"%"});
+  all.sort((a,b)=>(b.d+b.m.t).localeCompare(a.d+a.m.t)).forEach(x=>col[col[x.m.c]?x.m.c:"okay"].push(x));
+  ["needed","okay","waste"].forEach(c=>{
+    const box=$("col_"+c);box.textContent="";
+    if(!col[c].length){const e=document.createElement("div");e.className="mut empty";e.textContent="—";box.append(e)}
+    col[c].forEach(x=>{
+      const r=document.createElement("div");r.className="xitem";
+      const nm=document.createElement("div");nm.className="xn";nm.textContent=x.m.d;
+      const am=document.createElement("b");am.textContent=eur(x.m.a);
+      const sm=document.createElement("small");sm.textContent=(expPeriod=="day"?"":x.d.slice(5).replace("-","/")+" ")+x.m.t;
+      const mv=document.createElement("button");mv.textContent="⇄";mv.className="s ghost";
+      mv.onclick=()=>{const o=["needed","okay","waste"];x.m.c=o[(o.indexOf(x.m.c)+1)%3];saveExp(f);renderExp()};
+      const rm=document.createElement("button");rm.textContent="✕";rm.className="s ghost";
+      rm.onclick=()=>{x.arr.splice(x.arr.indexOf(x.m),1);saveExp(f);renderExp()};
+      const bt=document.createElement("div");bt.className="xb";bt.append(sm,mv,rm);
+      r.append(nm,am,bt);box.append(r);
+    });
+  });
+  document.querySelectorAll("#perSeg button").forEach(b=>b.classList.toggle("on",b.dataset.p==expPeriod));
+}
+document.querySelectorAll("#perSeg button").forEach(b=>b.onclick=()=>{expPeriod=b.dataset.p;renderExp()});
+function addExp(d,a,c){const f=loadExp(),k=dayKey(),n=new Date(),arr=f[k]||[];arr.push({t:String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0"),d:String(d||"").slice(0,80),a:Math.round((+a||0)*100)/100,c:CATS[c]?c:"okay"});f[k]=arr;saveExp(f);renderExp();return arr}
+function expNote(){const a=loadExp()[dayKey()]||[],t=sumExp(a);return ` Expenses today: ${eur(t.all)} (needed ${eur(t.needed)}, okay ${eur(t.okay)}, waste ${eur(t.waste)})`+(a.length?" ("+a.map(m=>`${m.d} ${m.a}€ ${m.c}`).join("; ")+")":"")+"."}
+const GURL=m=>`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`;
+async function searchWeb(query,language){
+  const r=await fetch(GURL("gemini-flash-latest"),{method:"POST",headers:{"content-type":"application/json","x-goog-api-key":S.get("gemini")},body:JSON.stringify({contents:[{role:"user",parts:[{text:`Answer in ${String(language).startsWith("el")?"Greek":"English"}, in at most 3 short spoken sentences, no markdown: ${query}`}]}],tools:[{google_search:{}}],generationConfig:{maxOutputTokens:300}})});
+  const j=await r.json();
+  if(!r.ok)return T("Search failed: ","Η αναζήτηση απέτυχε: ")+String(j.error?.message||r.status).slice(0,80);
+  return (j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join(" ").trim()||T("I found nothing.","Δεν βρήκα κάτι.");
+}
+const RECEIPT='Read this receipt. Return JSON only: {"merchant":string,"total":number,"items":[{"name":string,"price":number,"category":"needed"|"okay"|"waste"}]}. Prices are numbers in euros (line total per item). Categorize each item: needed = necessities (groceries, bills, transport, health), okay = reasonable extras, waste = impulsive or unnecessary (sweets, snacks, unneeded things). Keep item names in the receipt language. If items are unreadable, return one item named after the merchant with the total.';
+function showScan(d){
+  const out=$("scanOut");out.textContent="";
+  const items=(d.items||[]).filter(i=>+i.price>0).map(i=>({d:(d.merchant?d.merchant+": ":"")+i.name,a:+i.price,c:CATS[i.category]?i.category:"okay"}));
+  const sum=items.reduce((o,i)=>o+i.a,0);
+  if(+d.total>0&&sum<d.total-.05)items.push({d:(d.merchant||T("Receipt","Απόδειξη"))+": "+T("other/unlisted","λοιπά"),a:Math.round((d.total-sum)*100)/100,c:"okay"});
+  if(!items.length){out.textContent=T("I couldn't read any items.","Δεν διάβασα προϊόντα.");return}
+  const box=document.createElement("div");box.className="card";
+  items.forEach(i=>{const r=document.createElement("div");r.textContent=`${i.d} — ${eur(i.a)} — ${CNAME()[i.c]}`;box.append(r)});
+  const ok=document.createElement("button"),no=document.createElement("button");ok.className=no.className="s";
+  ok.textContent=T("Add all","Προσθήκη όλων")+" ("+eur(items.reduce((o,i)=>o+i.a,0))+")";no.textContent=T("Cancel","Ακύρωση");
+  ok.onclick=()=>{items.forEach(i=>addExp(i.d,i.a,i.c));out.textContent=T("Added.","Προστέθηκε.")};no.onclick=()=>{out.textContent=""};
+  box.append(ok,no);out.append(box);
+}
+$("scanBtn").onclick=()=>$("scanIn").click();
+$("scanIn").onchange=async e=>{
+  const file=e.target.files[0];e.target.value="";if(!file)return;
+  const out=$("scanOut");out.textContent=T("Reading receipt…","Διαβάζω την απόδειξη…");
+  try{
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file)});
+    const sc=Math.min(1,1400/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=img.width*sc;c.height=img.height*sc;c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+    const data=c.toDataURL("image/jpeg",.8).split(",")[1];
+    const r=await fetch(GURL("gemini-flash-latest"),{method:"POST",headers:{"content-type":"application/json","x-goog-api-key":S.get("gemini")},body:JSON.stringify({contents:[{role:"user",parts:[{inlineData:{mimeType:"image/jpeg",data}},{text:RECEIPT}]}],generationConfig:{responseMimeType:"application/json",maxOutputTokens:2000}})});
+    const j=await r.json();if(!r.ok)throw new Error(j.error?.message||r.status);
+    const txt=(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("");
+    showScan(JSON.parse(txt.replace(/```json|```/g,"").trim()));
+  }catch(err){out.textContent="⚠ "+err.message}
+};
+const showTab=t=>{
+  [["j","mainView","tabJ"],["m","musicView","tabM"],["c","calView","tabC"],["g","goalsView","tabG"],["e","expView","tabE"]].forEach(([k,v,b])=>{$(v).style.display=k==t?"flex":"none";$(b).classList.toggle("on",k==t)});
+  clearInterval(mTimer);if(t=="m"){mRefresh();mTimer=setInterval(mRefresh,3000)}
+};
+$("tabJ").onclick=()=>showTab("j");$("tabM").onclick=()=>showTab("m");$("tabC").onclick=()=>showTab("c");$("tabG").onclick=()=>showTab("g");$("tabE").onclick=()=>showTab("e");
+
+// ---------- Music ----------
+let mTimer=null,mState=null;
+const fmt=ms=>{const q=Math.floor(ms/1000);return Math.floor(q/60)+":"+String(q%60).padStart(2,"0")};
+async function mRefresh(){
+  try{
+    const r=await sp("/me/player");
+    if(r.status!=200){$("mTitle").textContent=T("Nothing playing","Δεν παίζει τίποτα");$("mArtist").textContent=T("Open Spotify on your phone and play a song","Άνοιξε το Spotify και παίξε ένα τραγούδι");$("mPlay").textContent="▶";mState=null;return}
+    const j=await r.json(),t=j.item;mState=j;
+    $("mTitle").textContent=t?.name||"—";$("mArtist").textContent=t?(t.artists||[]).map(a=>a.name).join(", "):"";
+    const img=t?.album?.images?.[1]||t?.album?.images?.[0];$("mArt").src=img?img.url:"";$("mArt").style.visibility=img?"visible":"hidden";
+    $("mPlay").textContent=j.is_playing?"⏸":"▶";
+    $("mBar").style.width=t?Math.min(100,j.progress_ms/t.duration_ms*100)+"%":"0";
+    $("mTime").textContent=t?fmt(j.progress_ms)+" / "+fmt(t.duration_ms):"";
+    $("mShuf").classList.toggle("on",!!j.shuffle_state);$("mRep").classList.toggle("on",j.repeat_state!="off");
+  }catch(e){$("mTitle").textContent=T("Spotify not connected","Το Spotify δεν είναι συνδεδεμένο")}
+}
+async function mCmd(path,method="POST"){try{await sp(path,{method})}catch(e){}setTimeout(mRefresh,400)}
+$("mPlay").onclick=()=>{if(mState&&mState.is_playing){musicOn=false;mCmd("/me/player/pause","PUT")}else{musicOn=true;mCmd("/me/player/play","PUT")}};
+$("mNext").onclick=()=>mCmd("/me/player/next");$("mPrev").onclick=()=>mCmd("/me/player/previous");
+$("mShuf").onclick=()=>mCmd("/me/player/shuffle?state="+!(mState&&mState.shuffle_state),"PUT");
+$("mRep").onclick=()=>mCmd("/me/player/repeat?state="+(mState&&mState.repeat_state=="off"?"context":"off"),"PUT");
+async function mSearch(){
+  const q=$("mQ").value.trim();if(!q)return;const box=$("mRes");box.textContent="…";
+  try{
+    const j=await (await sp("/search?"+new URLSearchParams({q,type:"track",limit:8}))).json();box.textContent="";
+    (j.tracks?.items||[]).forEach(t=>{
+      const r=document.createElement("div");r.className="item";r.style.cursor="pointer";
+      const im=document.createElement("img");im.src=t.album.images.slice(-1)[0]?.url||"";im.className="th";
+      const lt=document.createElement("div");lt.className="grow";lt.textContent=t.name;
+      const sm=document.createElement("small");sm.textContent=t.artists.map(a=>a.name).join(", ");lt.append(sm);
+      r.append(im,lt);r.onclick=async()=>{await startTrack(t);playedNow=false;mRefresh()};box.append(r);
+    });
+    if(!box.children.length)box.textContent=T("No results","Κανένα αποτέλεσμα");
+  }catch(e){box.textContent="⚠ "+e.message}
+}
+$("mGo").onclick=mSearch;$("mQ").onkeydown=e=>{if(e.key=="Enter")mSearch()};
+
+// ---------- Goals & daily report ----------
+const GF=["kcal","protein","water","budget","wasteMax","notes"];
+const loadGoals=()=>{try{return JSON.parse(S.get("goals")||"{}")}catch(e){return {}}};
+const loadRep=()=>{try{return JSON.parse(S.get("reports")||"[]")}catch(e){return []}};
+const monthDays=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth()+1,0).getDate()};
+function dayStats(k){
+  const a=loadFood()[k]||[],t=totals(a),e=sumExp(loadExp()[k]||[]);
+  return {k:t.k,p:Math.round(t.p),w:waterSum(loadWater()[k]||[]),spent:Math.round(e.all*100)/100,needs:e.needed,wants:e.okay,waste:e.waste,meals:a.length};
+}
+function scoreDay(st,g){
+  const parts=[],cl=x=>Math.max(0,Math.min(1,x));
+  if(+g.kcal>0){const r=st.k/g.kcal;parts.push(st.k?cl(r>=.9&&r<=1.1?1:1-Math.abs(r-1)*2.5):0)}
+  if(+g.protein>0)parts.push(cl(st.p/g.protein));
+  if(+g.water>0)parts.push(cl(st.w/g.water));
+  if(+g.budget>0){const al=g.budget/monthDays();parts.push(st.spent<=al?1:cl(1-(st.spent/al-1)))}
+  if(+g.wasteMax>0){const al=g.wasteMax/monthDays();parts.push(st.waste<=al?1:cl(1-(st.waste/al-1)/2))}
+  return parts.length?Math.round(1+19*parts.reduce((o,x)=>o+x,0)/parts.length):null;
+}
+async function aiComment(rep,g){
+  const prompt=`Write a 2-3 sentence honest, supportive end-of-day review in ${uiLang=="el"?"Greek":"English"} for a personal tracking app. Goals: ${JSON.stringify(g)}. Day stats: ${JSON.stringify(rep.st)} (k=kcal, p=protein g, w=water L, spent/needs/wants/waste in euros). Score: ${rep.sc}/20. Say what went well and one thing to improve. No medical advice.`;
+  for(const m of ["gemini-flash-lite-latest","gemini-flash-latest"]){
+    const r=await fetch(GURL(m),{method:"POST",headers:{"content-type":"application/json","x-goog-api-key":S.get("gemini")},body:JSON.stringify({contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:250}})});
+    if(r.ok){const j=await r.json();return (j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join(" ").trim()}
+  }
+  return "";
+}
+function banner(rep){
+  const b=$("repBanner");b.style.display="block";
+  b.textContent=`📊 ${T("Report ready","Έτοιμο report")} ${rep.d}: ${rep.sc==null?"—":rep.sc+"/20"} — ${T("tap to view","πάτα για προβολή")}`;
+  b.onclick=()=>{showTab("g");b.style.display="none"};navigator.vibrate&&navigator.vibrate([200,100,200]);
+}
+async function makeReport(k,late){
+  const g=loadGoals(),st=dayStats(k),rep={d:k,sc:scoreDay(st,g),st,late:!!late,c:""},save=()=>S.set("reports",JSON.stringify([rep,...loadRep().filter(r=>r.d!=k)].slice(0,60)));
+  save();renderGoals();banner(rep);
+  try{rep.c=await aiComment(rep,g);save();renderGoals()}catch(e){}
+}
+function renderGoals(){
+  const g=loadGoals(),n=new Date(),box=$("gProg");box.textContent="";
+  const pre=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0");
+  const st=Array.from({length:n.getDate()},(_,i)=>dayKeyOff(i)).filter(k=>k.startsWith(pre)).map(dayStats);
+  const spent=st.reduce((o,x)=>o+x.spent,0),wst=st.reduce((o,x)=>o+x.waste,0),lg=st.filter(x=>x.k>0),avgK=lg.length?Math.round(lg.reduce((o,x)=>o+x.k,0)/lg.length):0,wd=st.filter(x=>+g.water>0&&x.w>=g.water).length;
+  const row=(label,val,max,txt)=>{
+    const d=document.createElement("div");d.style.margin="10px 0";
+    const h=document.createElement("div");h.className="row mut";const a=document.createElement("span");a.textContent=label;const b=document.createElement("span");b.textContent=txt;h.append(a,b);
+    const br=document.createElement("div");br.className="prog";const i=document.createElement("div");i.style.cssText=`height:100%;width:${Math.min(100,val/max*100)}%;background:${val>max?"#ff5a5a":"var(--acc)"}`;br.append(i);d.append(h,br);box.append(d);
+  };
+  if(+g.budget>0)row(T("Spent","Έξοδα"),spent,+g.budget,`${eur(spent)} / ${eur(+g.budget)}`);
+  if(+g.wasteMax>0)row("Wasted",wst,+g.wasteMax,`${eur(wst)} / ${eur(+g.wasteMax)}`);
+  if(+g.kcal>0)row(T("Avg kcal/day","Μ.Ο. kcal/ημέρα"),avgK,+g.kcal,`${avgK} / ${g.kcal}`);
+  if(+g.water>0)row(T("Water goal days","Ημέρες στόχου νερού"),wd,n.getDate(),`${wd} / ${n.getDate()}`);
+  if(!box.children.length)box.textContent=T("Set your goals above.","Όρισε πρώτα τους στόχους.");
+  const rb=$("reports");rb.textContent="";
+  loadRep().forEach(r=>{
+    const c=document.createElement("div");c.className="card";
+    const h=document.createElement("div");h.className="row";
+    const a=document.createElement("b");a.textContent=r.d+(r.late?" ("+T("late","καθυστερημένο")+")":"");
+    const b=document.createElement("b");b.style.cssText="font-size:26px;color:var(--acc)";b.textContent=r.sc==null?"—":r.sc+"/20";h.append(a,b);
+    const s2=document.createElement("div");s2.className="mut";s2.style.margin="6px 0";
+    s2.textContent=`${r.st.k} kcal · ${r.st.p} g ${T("protein","πρωτεΐνη")} · 💧 ${r.st.w} L · ${eur(r.st.spent)} (Needs ${eur(r.st.needs)} / Wants ${eur(r.st.wants)} / Wasted ${eur(r.st.waste)})`;
+    c.append(h,s2);if(r.c){const p=document.createElement("div");p.textContent=r.c;c.append(p)}
+    rb.append(c);
+  });
+}
+$("g_save").onclick=()=>{const g={};GF.forEach(f=>{const v=$("g_"+f).value.trim();if(v!=="")g[f]=f=="notes"?v:+v});S.set("goals",JSON.stringify(g));renderGoals();$("g_save").textContent=T("Saved ✓","Αποθηκεύτηκε ✓");setTimeout(()=>{$("g_save").textContent=T("Save goals","Αποθήκευση στόχων")},1500)};
+$("repNow").onclick=()=>makeReport(dayKeyOff(0));
+setInterval(()=>{const n=new Date();if(n.getHours()==23&&n.getMinutes()==59&&!loadRep().some(r=>r.d==dayKeyOff(0)))makeReport(dayKeyOff(0))},20000);
+
+// ---------- Daily 6:00 quote ----------
+let lastQ=0;
+const getQuote=()=>{try{return JSON.parse(S.get("quote")||"null")}catch(e){return null}};
+async function gen(prompt){
+  for(const m of ["gemini-flash-lite-latest","gemini-flash-latest"]){
+    const r=await fetch(GURL(m),{method:"POST",headers:{"content-type":"application/json","x-goog-api-key":S.get("gemini")},body:JSON.stringify({contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:300}})});
+    if(r.ok){const j=await r.json();return (j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join(" ").trim()}
+  }
+  return "";
+}
+function renderQuote(){
+  const q=getQuote(),c=$("quoteCard");
+  if(!q){c.style.display="none";return}
+  c.style.display="block";c.textContent="";
+  const l=document.createElement("div");l.className="lbl";l.textContent="☀️ "+T("Today's quote","Το quote της ημέρας")+" · "+q.d;
+  const [a,...b]=q.t.split(/\n+/),t=document.createElement("div");t.className="qt";t.textContent=a;c.append(l,t);
+  if(b.length){const x=document.createElement("div");x.className="qa";x.textContent=b.join(" ");c.append(x)}
+  const r=document.createElement("button");r.className="s ghost";r.textContent="↻ "+T("New","Νέο");r.onclick=()=>makeQuote();c.append(r);
+}
+async function makeQuote(){
+  const g=loadGoals(),y=dayKeyOff(1),rp=loadRep().find(r=>r.d==y),el=uiLang=="el";
+  const prompt=`Write ONE short motivational quote (max 2 sentences) in ${el?"Greek":"English"} that is practical for this person's real life today. Then, on a new line, one concrete action for today (one sentence starting with "${el?"Ενέργεια":"Action"}:") tied to their goals and yesterday's results. Goals: ${JSON.stringify(g)}. Yesterday: ${JSON.stringify(dayStats(y))}${rp?`, score ${rp.sc}/20`:""}. If there is little data, make it broadly practical. No cliches, no medical advice, no preamble.`;
+  try{const t=await gen(prompt);if(t){S.set("quote",JSON.stringify({d:dayKeyOff(0),t}));renderQuote();navigator.vibrate&&navigator.vibrate([150])}}catch(e){}
+}
+function checkQuote(){const q=getQuote();if(new Date().getHours()>=6&&(!q||q.d!=dayKeyOff(0))&&Date.now()-lastQ>300000){lastQ=Date.now();makeQuote()}}
+setInterval(checkQuote,20000);
+
+// ---------- Gemini ----------
+let uiLang=(navigator.language||"").startsWith("el")?"el":"en";
+const T=(en,el)=>uiLang=="el"?el:en;
+const MODEL="gemini-flash-latest";
+const SYSTEM="You are Jarvis, a calm, dryly witty British butler-style assistant who speaks fluent Greek and English. Always reply in the language the user just spoke (Greek or English). Replies are spoken aloud: 1-3 short sentences, no markdown or lists. Use play_song for music (title and artist separately, in the original script), pause_music to pause, and create_event to add calendar events (work out exact dates from the current date and time; assume 1 hour if no duration is given). Use log_meal when the user says what they ate (one meal at a time): use their calorie and protein numbers if given, otherwise estimate realistically from typical portions. Use web_search for ANY factual, current or unknown information (news, people, places, prices, weather, sports, definitions) instead of guessing. Use play_songs to queue several songs (play_now true starts the first now, false adds them after the current one), play_playlist for playlists, pause_music and resume_music to pause or continue where it stopped. Use remove_entry to delete a meal or expense, even from earlier days. Use log_expense when the user says what they spent: category needed = necessities (groceries, bills, rent, transport, health), okay = reasonable extras, waste = impulsive or unnecessary; use the category the user names if any; remove_last_expense undoes the last one. If the user says the wrong song played, call play_next_match. Use set_alarm for alarms (time = next occurrence) and cancel_alarms to cancel them. Set meal to breakfast, lunch, snack or dinner from what they say, otherwise from the time of day. Use log_water for water they drank, in liters. Use remove_last_meal to undo the last entry. Answer questions about today's intake from the food log. If the audio is silent or unintelligible, politely ask the user to repeat.";
+const TOOLS=[{functionDeclarations:[
+  {name:"play_song",description:"Search Spotify for a song and play it.",parameters:{type:"OBJECT",properties:{title:{type:"STRING",description:"Song title only, in its original script (Greek songs in Greek letters)"},artist:{type:"STRING",description:"Artist name only, in the script Spotify uses (Greek artists in Greek letters), optional"}},required:["title"]}},
+  {name:"pause_music",description:"Pause Spotify playback."},
+  {name:"resume_music",description:"Resume Spotify playback from where it was paused."},
+  {name:"play_songs",description:"Play or queue several songs on Spotify.",parameters:{type:"OBJECT",properties:{songs:{type:"ARRAY",items:{type:"OBJECT",properties:{title:{type:"STRING"},artist:{type:"STRING"}},required:["title"]}},play_now:{type:"BOOLEAN",description:"true: start the first song now and queue the rest; false: add all after the current song"}},required:["songs"]}},
+  {name:"play_playlist",description:"Play a Spotify playlist by name (the user's own first).",parameters:{type:"OBJECT",properties:{name:{type:"STRING"}},required:["name"]}},
+  {name:"remove_entry",description:"Delete a logged meal or expense, also from earlier days.",parameters:{type:"OBJECT",properties:{kind:{type:"STRING",enum:["meal","expense"]},match:{type:"STRING",description:"Words from the entry description"},days_ago:{type:"NUMBER",description:"0 today, 1 yesterday... omit to search the last 30 days"}},required:["kind"]}},
+  {name:"play_next_match",description:"Play the next best Spotify match, when the user says the wrong song played."},
+  {name:"set_alarm",description:"Set an alarm that rings in this web page.",parameters:{type:"OBJECT",properties:{time:{type:"STRING",description:"Next occurrence as local ISO 8601 datetime, e.g. 2026-10-04T07:30:00"},label:{type:"STRING"}},required:["time"]}},
+  {name:"cancel_alarms",description:"Cancel all alarms."},
+  {name:"log_expense",description:"Record money the user spent and categorize it.",parameters:{type:"OBJECT",properties:{description:{type:"STRING"},amount:{type:"NUMBER",description:"Amount in euros"},category:{type:"STRING",enum:["needed","okay","waste"]}},required:["description","amount","category"]}},
+  {name:"remove_last_expense",description:"Remove the most recently logged expense of today."},
+  {name:"web_search",description:"Search the web for current or factual information the user asks about.",parameters:{type:"OBJECT",properties:{query:{type:"STRING"}},required:["query"]}},
+  {name:"log_meal",description:"Record one meal the user ate, with estimated calories and protein.",parameters:{type:"OBJECT",properties:{description:{type:"STRING",description:"Short meal description in the user's language"},calories:{type:"NUMBER"},protein_g:{type:"NUMBER"},meal:{type:"STRING",enum:["breakfast","lunch","snack","dinner"]}},required:["description","calories","protein_g"]}},
+  {name:"log_water",description:"Record water the user drank, in liters (a glass is 0.25).",parameters:{type:"OBJECT",properties:{liters:{type:"NUMBER"}},required:["liters"]}},
+  {name:"remove_last_meal",description:"Remove the most recently logged meal of today."},
+  {name:"create_event",description:"Prepare a calendar event for the user to save.",parameters:{type:"OBJECT",properties:{title:{type:"STRING"},start:{type:"STRING",description:"Local start time, ISO 8601 like 2026-10-03T18:00:00"},end:{type:"STRING",description:"Local end time, same format (optional)"},description:{type:"STRING"},location:{type:"STRING"}},required:["title","start"]}}
+]}];
+TOOLS[0].functionDeclarations.forEach(d=>{d.parameters=d.parameters||{type:"OBJECT",properties:{}};d.parameters.properties.language={type:"STRING",description:"Language the user spoke: en or el"}});
+const FAST=["play_song","pause_music","create_event","log_meal","remove_last_meal","set_alarm","cancel_alarms","play_next_match","log_expense","remove_last_expense","web_search","log_water","play_songs","play_playlist","resume_music","remove_entry"];
+let hist=[],think=true;
+function eventCard(a){
+  const s=new Date(a.start);if(isNaN(s))return T("I couldn't read that date.","Δεν κατάλαβα την ημερομηνία.");
+  let e=a.end?new Date(a.end):null;if(!e||isNaN(e)||e<=s)e=new Date(s.getTime()+36e5);
+  const p=n=>String(n).padStart(2,"0"),q=encodeURIComponent;
+  const f=d=>`${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
+  const tz=Intl.DateTimeFormat().resolvedOptions().timeZone,ds=a.description||"",lc=a.location||"";
+  const g=`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${q(a.title)}&dates=${f(s)}/${f(e)}&ctz=${q(tz)}&details=${q(ds)}&location=${q(lc)}`;
+  const i=`intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/event;S.title=${q(a.title)};S.description=${q(ds)};S.eventLocation=${q(lc)};l.beginTime=${s.getTime()};l.endTime=${e.getTime()};end`;
+  const d=document.createElement("div");d.className="ai";
+  const bd=document.createElement("b");bd.textContent="📅 "+a.title+" — "+s.toLocaleString([],{dateStyle:"medium",timeStyle:"short"});
+  d.append(bd,document.createElement("br"));
+  [[i,T("Save to phone calendar","Αποθήκευση στο ημερολόγιο")],[g,"Google Calendar"]].forEach(([h,t])=>{const x=document.createElement("a");x.href=h;x.textContent=t;if(h===g)x.target="_blank";x.style.cssText="color:#3ab6ff;margin-right:14px";d.append(x)});
+  $("log").prepend(d);
+  return T("Event ready. Tap the card to save it.","Το event είναι έτοιμο. Πάτα την κάρτα για αποθήκευση.");
+}
+const MODELS=["gemini-flash-lite-latest","gemini-flash-latest"],sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let stopRec=null;
+async function gem(){
+  const now=new Date().toLocaleString("en-GB",{dateStyle:"full",timeStyle:"short"})+" ("+Intl.DateTimeFormat().resolvedOptions().timeZone+")";
+  const body={systemInstruction:{parts:[{text:SYSTEM+" Current date and time: "+now+"."+foodNote()+expNote()}]},tools:TOOLS,contents:hist,generationConfig:{maxOutputTokens:300}};
+  const hasAudio=hist.some(c=>c.parts?.some(p=>p.inlineData)),ms=hasAudio?[...MODELS].reverse():MODELS;
+  if(think)body.generationConfig.thinkingConfig={thinkingLevel:hasAudio?"low":"minimal"};
+  for(const m of ms)for(let k=0;k<2;k++){
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{method:"POST",headers:{"content-type":"application/json","x-goog-api-key":S.get("gemini")},body:JSON.stringify(body)});
+    const j=await r.json();if(r.ok)return j;
+    const msg=j.error?.message||String(r.status);
+    if(think&&/think/i.test(msg)){think=false;delete body.generationConfig.thinkingConfig;k--;continue}
+    if(r.status==500||r.status==503){await sleep(700);continue}
+    if(r.status==404||r.status==429)break;
+    throw new Error(msg);
+  }
+  throw new Error(T("The model is busy right now. Please try again in a moment.","Το μοντέλο είναι φορτωμένο αυτή τη στιγμή. Δοκίμασε ξανά σε λίγο."));
+}
+function toWav(chunks,sr){
+  const len=chunks.reduce((a,c)=>a+c.length,0),x=new Float32Array(len);let o=0,pk=0;
+  for(const c of chunks){x.set(c,o);o+=c.length}
+  for(const v of x)pk=Math.max(pk,Math.abs(v));
+  const g=pk>0?Math.min(.9/pk,30):1,k=Math.max(1,Math.round(sr/16000)),rate=Math.round(sr/k),n=Math.floor(len/k);
+  const buf=new ArrayBuffer(44+n*2),v=new DataView(buf),w=(p,t)=>[...t].forEach((c,i)=>v.setUint8(p+i,c.charCodeAt(0)));
+  w(0,"RIFF");v.setUint32(4,36+n*2,true);w(8,"WAVEfmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,"data");v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){let a=0;for(let j=0;j<k;j++)a+=x[i*k+j];v.setInt16(44+i*2,Math.max(-1,Math.min(1,a/k*g))*32767,true)}
+  const b=new Uint8Array(buf);let bin="";for(let i=0;i<b.length;i+=8192)bin+=String.fromCharCode(...b.subarray(i,i+8192));
+  return btoa(bin);
+}
+async function recordAudio(){
+  const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+  const ctx=new AudioContext(),src=ctx.createMediaStreamSource(stream),proc=ctx.createScriptProcessor(4096,1,1),chunks=[];
+  let n=0,floor=0,started=false,quiet=0;const t0=Date.now();
+  return new Promise(res=>{
+    const done=()=>{proc.onaudioprocess=null;proc.disconnect();src.disconnect();stream.getTracks().forEach(t=>t.stop());const sr=ctx.sampleRate;ctx.close();stopRec=null;res(started?toWav(chunks,sr):null)};
+    stopRec=done;
+    proc.onaudioprocess=e=>{
+      const d=new Float32Array(e.inputBuffer.getChannelData(0));chunks.push(d);
+      const r=Math.sqrt(d.reduce((a,v)=>a+v*v,0)/d.length);
+      if(n++<4){floor=n==1?r:Math.min(floor,r);return}
+      if(r>floor*2.5+.003){started=true;quiet=0}else if(started){quiet+=d.length/ctx.sampleRate;if(quiet>pat())done()}
+      if((Date.now()-t0)/1000>(started?30:9))done();
+    };
+    src.connect(proc);proc.connect(ctx.destination);
+  });
+}
+async function ask(text,audio){
+  playedNow=false;
+  if(hist.length>30)hist=[];
+  hist.push({role:"user",parts:audio?[{inlineData:{mimeType:"audio/wav",data:audio}},{text:`(The user is speaking ${lang=="el-GR"?"Greek":"English"}.)`}]:[{text}]});
+  const idx=hist.length-1;
+  try{
+    for(let i=0;i<5;i++){
+      const j=await gem();
+      const c=j.candidates?.[0]?.content;if(!c)return T("I have nothing to say to that.","Δεν έχω τι να πω γι' αυτό.");
+      hist.push(c);
+      const calls=(c.parts||[]).filter(p=>p.functionCall);
+      if(!calls.length)return (c.parts||[]).map(p=>p.text||"").join(" ").trim()||"OK.";
+      const res=[],outs=[];
+      for(const p of calls){const f=p.functionCall;if(f.args?.language)uiLang=String(f.args.language).startsWith("el")?"el":"en";let out;try{out=await tools[f.name](f.args||{})}catch(e){out="Error: "+e.message}outs.push(out);res.push({functionResponse:{...(f.id?{id:f.id}:{}),name:f.name,response:{result:out}}})}
+      hist.push({role:"user",parts:res});
+      if(calls.every(p=>FAST.includes(p.functionCall.name))){const m=outs.join(" ");hist.push({role:"model",parts:[{text:m}]});return m}
+    }
+    return T("Apologies, that got tangled.","Συγγνώμη, μπερδεύτηκα.");
+  }finally{if(audio)hist[idx]={role:"user",parts:[{text:"(spoken request)"}]}}
+}
+
+// ---------- Voice out ----------
+const GR=/[\u0370-\u03FF\u1F00-\u1FFF]/,TTS_MODELS=["gemini-3.1-flash-tts-preview","gemini-3.8-flash-lite-tts"];let ttsOff=0,ttsWhy="";
+async function geminiSpeak(text){
+  if(S.get("natural")==="0"||Date.now()<ttsOff)return false;
+  const pre=GR.test(text)?"Say in a calm, warm, natural, brisk conversational tone: ":"Say in a calm, refined, softly witty British butler voice at a brisk, natural pace: ";
+  for(const m of TTS_MODELS){
+    try{
+      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{method:"POST",headers:{"content-type":"application/json","x-goog-api-key":S.get("gemini")},body:JSON.stringify({contents:[{parts:[{text:(m.includes("3.8")?"":pre)+text}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:"Charon"}}}}})});
+      if(r.status==429){ttsOff=Date.now()+60000;ttsWhy="429";return false}
+      const j=await r.json(),d=j.candidates?.[0]?.content?.parts?.find(p=>p.inlineData)?.inlineData?.data;
+      if(!r.ok||!d){ttsWhy=(j.error?.message||"no audio").slice(0,90);continue}
+      const pcm=Uint8Array.from(atob(d),c=>c.charCodeAt(0)),h=new DataView(new ArrayBuffer(44)),w=(p,t)=>[...t].forEach((c,i)=>h.setUint8(p+i,c.charCodeAt(0)));
+      w(0,"RIFF");h.setUint32(4,36+pcm.length,true);w(8,"WAVEfmt ");h.setUint32(16,16,true);h.setUint16(20,1,true);h.setUint16(22,1,true);h.setUint32(24,24000,true);h.setUint32(28,48000,true);h.setUint16(32,2,true);h.setUint16(34,16,true);w(36,"data");h.setUint32(40,pcm.length,true);
+      const a=new Audio(URL.createObjectURL(new Blob([h,pcm],{type:"audio/wav"})));a.playbackRate=spd()*1.1;
+      await new Promise(res=>{a.onended=res;a.onerror=res;a.play().catch(res)});
+      return true;
+    }catch(e){ttsWhy=String(e.message||e).slice(0,90)}
+  }
+  return false;
+}
+
+const spd=()=>Math.min(1.5,Math.max(.6,parseFloat(S.get("speed"))||1));
+const pat=()=>Math.min(5,Math.max(1,parseFloat(S.get("patience"))||2.5));
+function warn(msg){const n=document.createElement("div");n.className="me";n.textContent="⚠ "+msg;$("log").prepend(n);$("spstat").textContent="⚠ "+msg}
+async function elSpeak(text){
+  const key=S.get("elKey"),voice=S.get("elVoice");if(!key||!voice)return false;
+  for(const m of ["eleven_flash_v2_5","eleven_multilingual_v2"]){
+    try{
+      const r=await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_64`,{method:"POST",headers:{"xi-api-key":key,"content-type":"application/json"},body:JSON.stringify({text,model_id:m})});
+      if(r.ok){const a=new Audio(URL.createObjectURL(await r.blob()));a.playbackRate=spd();await new Promise(res=>{a.onended=res;a.onerror=res;a.play().catch(e=>{warn("Audio blocked: "+e.message);res()})});return true}
+      const j=await r.json().catch(()=>({})),d=j.detail||j;
+      warn(`ElevenLabs ${r.status}: `+String(d.message||d.status||JSON.stringify(d)).slice(0,140));
+      if(![400,404,422].includes(r.status))return false;
+    }catch(e){warn("ElevenLabs: "+(e.message||e));return false}
+  }
+  return false;
+}
+async function speak(text){
+  log("ai",text);
+  if(await elSpeak(text))return;
+  if(await geminiSpeak(text))return;
+  if(S.get("natural")!=="0"){const n=document.createElement("div");n.className="me";n.textContent="⚠ "+T("Gemini voice unavailable, using the phone voice: ","Η φωνή Gemini δεν είναι διαθέσιμη, χρησιμοποιώ τη φωνή του κινητού: ")+ttsWhy;$("log").prepend(n)}
+  await new Promise(res=>{
+    const gr=/[\u0370-\u03FF\u1F00-\u1FFF]/.test(text),L=gr?"el-GR":"en-GB";const u=new SpeechSynthesisUtterance(text);u.lang=L;u.pitch=.7;u.rate=spd()*1.1;
+    const vs=speechSynthesis.getVoices().filter(v=>v.lang.replace("_","-").toLowerCase()==L.toLowerCase()),v=vs.find(v=>/\bmale\b|rjs|gbd|george|daniel|ryan|nikos|stefanos/i.test(v.name)&&!/female/i.test(v.name))||vs[0];if(v)u.voice=v;
+    u.onend=res;u.onerror=res;speechSynthesis.speak(u);
+  });
+}
+
+// ---------- Wake word + listening ----------
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec,listening=false,busy=false,awakeUntil=0,lang=S.get("lang")||((navigator.language||"").startsWith("el")?"el-GR":"en-US");
+function startRec(){
+  if(!SR){status("Speech recognition unsupported. Use Chrome on Android.");return}
+  rec=new SR();rec.continuous=true;rec.interimResults=false;rec.maxAlternatives=3;rec.lang=lang;rec.onstart=()=>keepMusic();
+  rec.onresult=e=>{const r=e.results[e.results.length-1],alts=Array.from(r).map(a=>a.transcript.trim()),t=alts.find(a=>{const m=WAKE.exec(norm(a));return m&&m.index<=12})||alts[0],i=Math.max(0,alts.indexOf(t));if(!busy)status(T("Heard: ","Άκουσα: ")+t);handle(t,r[i].confidence)};
+  rec.onend=()=>{if(listening&&!busy)try{rec.lang=lang;rec.start()}catch(e){}};
+  rec.onerror=e=>{if(e.error=="not-allowed"){listening=false;$("orb").className="";status("Microphone blocked. Allow it in site settings.")}};
+  rec.start();
+}
+const norm=x=>x.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/ς/g,"σ");
+const WAKE=/\b(?:jarvi[sz]?|jarvys|jarvas|jervis|gervais|yaris|yarvis|service|travis|garvis|darvis|charvis|harvis)\b|(?:ντ?)?(?:τζ|τσ|ζ|γι)[αε]ρ?β[ιηυ][σζ]?/;
+function chime(){try{const c=new AudioContext(),o=c.createOscillator(),g=c.createGain();o.frequency.value=660;g.gain.value=.12;o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.12);setTimeout(()=>c.close(),500)}catch(e){}}
+const restartRec=()=>{if(listening)try{rec.lang=lang;rec.start()}catch(e){}};
+async function handle(t,conf){
+  if(busy)return;
+  const m0=WAKE.exec(norm(t)),m=m0&&m0.index<=12?m0:null;
+  if(!m)return;
+  const cmd=t.slice(m.index+m[0].length).replace(/^[\s,.!?;:-]+/,"").trim();
+  busy=true;rec.stop();keepMusic();
+  try{
+    let ans;
+    if(cmd.split(/\s+/).length>=2&&(conf||0)>=.85){uiLang=lang=="el-GR"?"el":"en";log("me",cmd);status(T("Thinking…","Σκέφτομαι…"));ans=await ask(cmd)}
+    else{
+      await sleep(250);chime();status(T("Listening…","Ακούω…"));
+      const a=await recordAudio();keepMusic();
+      if(!a){busy=false;status(T("Say “Jarvis…”","Πες «Jarvis…»"));restartRec();return}
+      log("me","🎤");status(T("Thinking…","Σκέφτομαι…"));ans=await ask("",a);
+    }
+    await reply(ans);
+  }catch(e){log("ai","Error: "+e.message)}
+  busy=false;status(T("Say “Jarvis…”","Πες «Jarvis…»"));restartRec();
+}
+const toggleWake=()=>{
+  listening=!listening;$("orb").className=listening?"on":"";$("orb").textContent=listening?"Listening":"Tap to start";
+  if(listening){startRec();status("Say “Jarvis…”")}else{rec&&rec.stop();status("Paused")}
+};
+let recording=false,mode=S.get("mode2")||"wake";
+$("orb").onclick=async()=>{
+  if(mode!="tap")return toggleWake();
+  if(busy)return;
+  if(recording){stopRec&&stopRec();return}
+  recording=true;$("orb").className="on";status(T("Listening… (tap to finish)","Ακούω… (πάτα για να τελειώσεις)"));
+  let a;
+  try{a=await recordAudio()}catch(e){recording=false;$("orb").className="";status(T("Microphone blocked. Allow it in site settings.","Το μικρόφωνο μπλοκαρίστηκε. Επέτρεψέ το στις ρυθμίσεις του site."));return}
+  recording=false;$("orb").className="";
+  keepMusic();
+  if(!a){status(T("I didn't hear anything. Tap and speak.","Δεν άκουσα τίποτα. Πάτα και μίλα."));return}
+  busy=true;uiLang=lang=="el-GR"?"el":"en";log("me","🎤");status(T("Thinking…","Σκέφτομαι…"));
+  try{await reply(await ask("",a))}catch(e){log("ai","Error: "+e.message);status("Error")}
+  busy=false;status(T("Tap and speak","Πάτα και μίλα"));
+};
+
+const setMode=()=>{
+  document.querySelectorAll("#modeSeg button").forEach(b=>b.classList.toggle("on",b.dataset.m==mode));
+  document.querySelectorAll("#langSeg button").forEach(b=>b.classList.toggle("on",b.dataset.l==lang));
+  $("voiceBox").style.display=mode=="text"?"none":"flex";$("typeBox").style.display=mode=="text"?"block":"none";$("langSeg").style.display=mode=="text"?"none":"flex";
+  $("orb").textContent=mode=="tap"?T("Tap & speak","Πάτα & μίλα"):T("Tap to start","Πάτα για έναρξη");
+  status(mode=="tap"?T("Tap, speak, tap again","Πάτα, μίλα, πάτα ξανά"):mode=="wake"?T("Tap once, then say “Jarvis…”","Πάτα μία φορά και μετά πες «Jarvis…»"):"");
+};
+const stopListening=()=>{if(listening){listening=false;rec&&rec.stop()}$("orb").className=""};
+document.querySelectorAll("#modeSeg button").forEach(b=>b.onclick=()=>{stopListening();mode=b.dataset.m;S.set("mode2",mode);setMode()});
+document.querySelectorAll("#langSeg button").forEach(b=>b.onclick=()=>{lang=b.dataset.l;S.set("lang",lang);uiLang=lang=="el-GR"?"el":"en";if(listening&&rec&&!busy)rec.stop();setMode();renderFood();renderExp();renderAl();renderGoals()});
+async function sendText(){
+  const v=$("txt").value.trim();if(!v||busy)return;$("txt").value="";
+  busy=true;uiLang=/[\u0370-\u03FF]/.test(v)?"el":"en";log("me",v);
+  try{log("ai",await ask(v))}catch(e){log("ai","Error: "+e.message)}
+  busy=false;keepMusic();
+}
+$("txtGo").onclick=sendText;$("txt").onkeydown=e=>{if(e.key=="Enter")sendText()};
+uiLang=lang=="el-GR"?"el":"en";
+setMode();renderFood();renderExp();renderAl();keepAwake();renderGoals();
+GF.forEach(f=>$("g_"+f).value=loadGoals()[f]??"");
+renderQuote();checkQuote();
+{const y=dayKeyOff(1),sy=dayStats(y);if(!loadRep().some(r=>r.d==y)&&(sy.meals||sy.spent>0||sy.w>0))makeReport(y,true)}
+
+// ---------- Settings ----------
+const fields=["gemini","spotifyId","elKey","elVoice"];
+fields.forEach(f=>$(f).value=S.get(f));
+$("natural").checked=S.get("natural")!=="0";$("natural").onchange=()=>S.set("natural",$("natural").checked?"1":"0");
+$("speed").value=S.get("speed")||"1";$("spdv").textContent=$("speed").value+"×";$("speed").oninput=()=>{S.set("speed",$("speed").value);$("spdv").textContent=$("speed").value+"×"};
+$("patience").value=S.get("patience")||"2.5";$("patv").textContent=$("patience").value+"s";$("patience").oninput=()=>{S.set("patience",$("patience").value);$("patv").textContent=$("patience").value+"s"};
+$("save").onclick=()=>{fields.forEach(f=>S.set(f,$(f).value.trim()));$("spstat").textContent="Saved."};
+$("conn").onclick=()=>{fields.forEach(f=>S.set(f,$(f).value.trim()));spLogin()};
+$("testBtn").onclick=()=>{fields.forEach(f=>S.set(f,$(f).value.trim()));speak(T("At your service.","Στη διάθεσή σας."))};
+(async()=>{
+  const code=new URLSearchParams(location.search).get("code");
+  if(code){await tokenReq({grant_type:"authorization_code",code,redirect_uri:REDIRECT,code_verifier:S.get("verifier")});history.replaceState({},"",REDIRECT)}
+  $("spstat").textContent=S.get("spTok")?"Spotify connected.":"Spotify not connected.";
+})();
+</script></body></html>
